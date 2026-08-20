@@ -1,0 +1,24 @@
+# Käyttö:
+#   1. Kopioi ../config.example.yaml -> ../config.yaml ja muokkaa,
+#      aseta state_path: "/data/wingfoil_alert_state.json"
+#   2. Kopioi ../.env.example -> ../.env ja täytä salaisuudet
+#   3. docker compose up -d
+#
+# Kontti itsessään ajaa main.py:n kerran ja sammuu - ajastus hoidetaan
+# host-koneen cronilla (suositus) TAI alla olevalla valinnaisella
+# "scheduler"-palvelulla, joka ajaa sen sisäisesti Ofelia-ajastimella.
+
+services:
+  wingfoil-alert:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    env_file:
+      - ../.env
+    volumes:
+      - wingfoil-data:/data
+      - ../config.yaml:/app/config.yaml:ro
+    restart: "no"  # ajetaan croneista/ajastimesta käsin, ei jatkuvana palveluna
+
+volumes:
+  wingfoil-data:

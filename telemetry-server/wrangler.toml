@@ -1,0 +1,9 @@
+name = "wingfoil-telemetry"
+main = "worker.js"
+compatibility_date = "2026-01-01"
+
+# Luo namespace: wrangler kv:namespace create WINGFOIL_KV
+# ja korvaa alla oleva id sillä, jonka komento palauttaa.
+kv_namespaces = [
+  { binding = "WINGFOIL_KV", id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID" }
+]
