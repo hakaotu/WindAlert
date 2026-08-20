@@ -2,8 +2,7 @@
 
 Avoimen lähdekoodin tuuli-ilmoitin suomalaisille vesiurheilijoille.
 Seuraa Ilmatieteen laitoksen (FMI) avointa dataa omalta lokaatioltasi ja
-lähettää ilmoituksen valitsemaasi kanavaan (Telegram, sähköposti, lisää
-tulossa), kun tuuli on juuri sinulle sopivissa lukemissa - oikeasta
+lähettää ilmoituksen valitsemaasi kanavaan (Telegram, sähköposti, ), kun tuuli on juuri sinulle sopivissa lukemissa - oikeasta
 suunnasta, riittävän kauan, ilman turhaa "flappausta" edestakaisin.
 
 Suunniteltu niin, että kuka tahansa vähän tietokonetta käyttänyt voi
@@ -66,7 +65,7 @@ hystereesi, suuntafiltteri, ennuste, ilmoituskanavat.
 
 **Tärkeä turvallisuushuomio:** aseta `direction_filter`, jos
 lokaatiollasi jokin tuulen suunta on vaarallinen (esim. puhaltaa
-mannerta kohti eli sinut voi ajautua kauas rannasta). Tyhjä lista
+pois päin mantereesta eli voi ajautua kauas rannasta). Tyhjä lista
 hyväksyy kaikki suunnat.
 
 ## Arkkitehtuuri lyhyesti
