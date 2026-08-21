@@ -129,6 +129,11 @@ def load_config(path: str) -> AppConfig:
         raise ConfigError(f"Config file {path} is empty.")
 
     try:
+        # Channels are resolved separately, and only if enabled: a disabled
+        # channel's ${VAR} references shouldn't block startup just because
+        # that env var isn't set (e.g. you haven't made a Telegram bot yet
+        # but want to test with ntfy).
+        notifications_raw = raw.pop("notifications", {})
         raw = _resolve_env_vars(raw)
 
         loc = raw["location"]
@@ -171,11 +176,14 @@ def load_config(path: str) -> AppConfig:
         )
 
         channels = []
-        for ch in raw.get("notifications", {}).get("channels", []):
+        for ch in notifications_raw.get("channels", []):
+            enabled = bool(ch.get("enabled", False))
+            if enabled:
+                ch = _resolve_env_vars(ch)
             channels.append(
                 NotifierChannelConfig(
                     type=ch["type"],
-                    enabled=bool(ch.get("enabled", False)),
+                    enabled=enabled,
                     options={k: v for k, v in ch.items() if k not in ("type", "enabled")},
                 )
             )

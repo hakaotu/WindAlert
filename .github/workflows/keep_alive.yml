@@ -1,0 +1,28 @@
+name: Keep repository active
+
+# GitHub disables scheduled workflows on a repo after 60 days with no
+# commits. This runs once a month and makes a trivial commit so the
+# "Wind alert check" schedule never gets silently switched off.
+on:
+  schedule:
+    - cron: "0 6 1 * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Trivial commit
+        run: |
+          git config user.name "wind-alert-bot"
+          git config user.email "actions@users.noreply.github.com"
+          mkdir -p state
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > state/.keep_alive
+          git add state/.keep_alive
+          git diff --staged --quiet || git commit -m "Keep-alive: prevent 60-day Actions auto-disable [skip ci]"
+          git push

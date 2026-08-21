@@ -1,4 +1,4 @@
-# Arkkitehtuuri - wingfoil-wind-alert
+# Arkkitehtuuri - WindAlert
 
 Tämä dokumentti kuvaa projektin toteutetun arkkitehtuurin (v0.1-v0.3) ja
 suunnitellut jatkoaskeleet. Alkuperäinen suunnitelmavaihe on tiivistetty
@@ -49,7 +49,7 @@ lisääminen ei vaadi mitään muutoksia `core/`-kansioon
 ## 3. Repo-rakenne (toteutunut)
 
 ```
-wingfoil-wind-alert/
+WindAlert/
 ├── README.md
 ├── ARCHITECTURE.md            # tämä tiedosto
 ├── PRIVACY.md

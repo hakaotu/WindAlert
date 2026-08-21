@@ -20,8 +20,15 @@ workflowt ovat täysin ilmaisia ja rajattomia.
    cp config.example.yaml config.yaml
    ```
    Muokkaa lokaatio, tuulirajat ja suuntafiltteri omaan tarpeeseesi.
-   Committaa `config.yaml` reposi - se ei sisällä salaisuuksia, koska
-   tokenit viitataan `${...}`-muodossa.
+   **Tärkeää:** aseta myös
+   ```yaml
+   state_path: "state/wingfoil_alert_state.json"
+   ```
+   oletuksen `~/.wingfoil_alert_state.json` tilalle - Actions-ajo käynnistyy
+   joka kerta tyhjästä koneesta, joten koti-hakemistoon kirjoitettu tila
+   katoaisi ajojen välissä ja hystereesi ei toimisi (näkisit ilmoituksen
+   uudestaan joka ajolla). Committaa `config.yaml` reposi - se ei sisällä
+   salaisuuksia, koska tokenit viitataan `${...}`-muodossa.
 
 4. **Lisää salaisuudet.** Mene **Settings → Secrets and variables →
    Actions → New repository secret** ja lisää tarvitsemasi:

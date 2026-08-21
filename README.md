@@ -50,11 +50,13 @@ Kaikissa poluissa lähtökohta on sama:
 
 ```bash
 git clone <tämä repo tai forkkisi>
-cd wingfoil-wind-alert
+cd WindAlert
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
 cp config.example.yaml config.yaml   # muokkaa lokaatio, tuulirajat, kanavat
 cp .env.example .env                 # täytä Telegram/SMTP-salaisuudet
-pip install -r requirements.txt
-python src/main.py --config config.yaml   # testiajo
+set -a && source .env && set +a      # lataa salaisuudet ympäristöön tätä testiajoa varten
+PYTHONPATH=src python3 src/main.py --config config.yaml   # testiajo
 ```
 
 ## Konfiguraatio

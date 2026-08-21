@@ -7,8 +7,8 @@ levyllä normaalisti ajojen välillä ilman erillisiä temppuja.
 ## Vaihtoehto A: cron (yksinkertaisin)
 
 ```bash
-git clone https://github.com/<sinun-tunnuksesi>/wingfoil-wind-alert.git
-cd wingfoil-wind-alert
+git clone https://github.com/<sinun-tunnuksesi>/WindAlert.git
+cd WindAlert
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -19,7 +19,7 @@ cp .env.example .env                 # täytä salaisuudet
 Lisää crontabiin (`crontab -e`):
 
 ```cron
-*/10 6-22 * * * cd /home/pi/wingfoil-wind-alert && set -a && . .env && set +a && .venv/bin/python src/main.py --config config.yaml >> /var/log/wingfoil_alert.log 2>&1
+*/10 6-22 * * * cd /home/pi/WindAlert && set -a && . .env && set +a && .venv/bin/python src/main.py --config config.yaml >> /var/log/wingfoil_alert.log 2>&1
 ```
 
 ## Vaihtoehto B: systemd (suositeltu palvelimille)
@@ -33,9 +33,9 @@ After=network-online.target
 
 [Service]
 Type=oneshot
-WorkingDirectory=/home/pi/wingfoil-wind-alert
-EnvironmentFile=/home/pi/wingfoil-wind-alert/.env
-ExecStart=/home/pi/wingfoil-wind-alert/.venv/bin/python src/main.py --config config.yaml
+WorkingDirectory=/home/pi/WindAlert
+EnvironmentFile=/home/pi/WindAlert/.env
+ExecStart=/home/pi/WindAlert/.venv/bin/python src/main.py --config config.yaml
 ```
 
 `/etc/systemd/system/wingfoil-alert.timer`:
