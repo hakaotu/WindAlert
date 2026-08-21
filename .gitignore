@@ -2,7 +2,6 @@ __pycache__/
 *.pyc
 .DS_Store
 .env
-config.yaml
 node_modules/
 .wrangler/
 *.egg-info/
