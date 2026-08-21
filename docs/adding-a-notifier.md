@@ -10,8 +10,13 @@ uuden tiedoston kirjoittamista.
 Luo `src/notifiers/oma_kanava.py`:
 
 ```python
+import logging
+
 from core.models import Alert
 from .base import Notifier
+
+log = logging.getLogger(__name__)
+
 
 class OmaKanavaNotifier(Notifier):
     def __init__(self, **options):

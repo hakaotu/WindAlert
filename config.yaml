@@ -16,7 +16,7 @@ wind:
   max_speed_ms: 15.0          # yläraja - liian kova tuuli ei myöskään hälytä
   direction_filter: []        # esim. ["SW", "W", "NW"] - tyhjä = kaikki suunnat kelpaavat
                                # TÄRKEÄÄ TURVALLISUUDEN KANNALTA rannikolla/järvellä:
-                               # rajaa pois mannerta kohti puhaltavat (offshore) suunnat.
+                               # rajaa pois mantereesta pois päin puhaltavat (offshore) suunnat.
   hysteresis:
     trigger_margin_ms: 0.5    # hälytys vasta kun tuuli ylittää min_speed_ms + tämä
     release_margin_ms: 1.0    # "tuuli loppui" vasta kun alitetaan min_speed_ms - tämä

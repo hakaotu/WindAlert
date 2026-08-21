@@ -2,8 +2,9 @@
 
 Avoimen lähdekoodin tuuli-ilmoitin suomalaisille vesiurheilijoille.
 Seuraa Ilmatieteen laitoksen (FMI) avointa dataa omalta lokaatioltasi ja
-lähettää ilmoituksen valitsemaasi kanavaan (Telegram, sähköposti, ), kun tuuli on juuri sinulle sopivissa lukemissa - oikeasta
-suunnasta, riittävän kauan, ilman turhaa "flappausta" edestakaisin.
+lähettää ilmoituksen valitsemaasi kanavaan (Telegram, sähköposti, ntfy),
+kun tuuli on juuri sinulle sopivissa lukemissa - oikeasta suunnasta,
+riittävän kauan, ilman turhaa "flappausta" edestakaisin.
 
 Suunniteltu niin, että kuka tahansa vähän tietokonetta käyttänyt voi
 ottaa tämän omaan käyttöönsä täysin ilmaiseksi, ilman että kenenkään
@@ -17,7 +18,7 @@ tarvitsee ylläpitää keskitettyä palvelinta.
 - ✅ Tuulen ala- ja yläraja + **hystereesi** (ei turhia peräkkäisiä
   ilmoituksia tuulen heilahdellessa rajan tuntumassa)
 - ✅ **Suuntafiltteri** - turvallisuuskriittinen ominaisuus rannikolla ja
-  järvillä: rajaa pois esim. mannerta kohti puhaltavat (offshore) suunnat
+  järvillä: rajaa pois esim. mantereesta pois päin puhaltavat (offshore) suunnat
 - ✅ Ennuste seuraaville tunneille mukaan hälytysviestiin (HARMONIE-malli)
 
 **v0.3 (uusinta):**

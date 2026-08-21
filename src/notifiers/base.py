@@ -1,7 +1,7 @@
 """Common interface for all notification channels.
 
 Adding a new channel means: implement this class, register it in
-main.py's NOTIFIER_REGISTRY, done. The core engine never needs to change.
+main.py's NOTIFIER_FACTORIES, done. The core engine never needs to change.
 """
 from __future__ import annotations
 
