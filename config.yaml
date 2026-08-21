@@ -27,7 +27,7 @@ forecast:
   hours_ahead: 6
 
 chart:
-  enabled: false             # v0.3: liitä graafi hälytysviestiin (Telegram/Email)
+  enabled: true             # v0.3: liitä graafi hälytysviestiin (Telegram/Email)
   lookback_hours: 8          # kuinka monen tunnin historia näytetään graafissa
 
 schedule:
