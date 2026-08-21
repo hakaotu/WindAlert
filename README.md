@@ -1,14 +1,14 @@
 # 🏄 Wingfoil / Kite / Surf -tuuli-ilmoitin
 
 Avoimen lähdekoodin tuuli-ilmoitin suomalaisille vesiurheilijoille.
-Seuraa Ilmatieteen laitoksen (FMI) avointa dataa omalta lokaatioltasi ja
+Se seuraa Ilmatieteen laitoksen (FMI) avointa dataa valitsemaltasi lokaatiolta ja
 lähettää ilmoituksen valitsemaasi kanavaan (Telegram, sähköposti, ntfy),
-kun tuuli on juuri sinulle sopivissa lukemissa - oikeasta suunnasta,
-riittävän kauan, ilman turhaa "flappausta" edestakaisin.
+kun tuuli on juuri sinulle sopivissa lukemissa - oikeasta suunnasta ja
+riittävän kauan.
 
-Suunniteltu niin, että kuka tahansa vähän tietokonetta käyttänyt voi
-ottaa tämän omaan käyttöönsä täysin ilmaiseksi, ilman että kenenkään
-tarvitsee ylläpitää keskitettyä palvelinta.
+Tää on suunniteltu niin, että kuka tahansa vähän tietokonetta käyttänyt voisi
+ottaa tämän omaan käyttöön ilman että kenenkään
+tarvitsee ylläpitää keskitettyä palvelinta. Palaute kiinnostaa, että onnistuuko :D Uskoisin, että kokemattomampikin käyttäjä saisi tän pystyyn AI-botin kanssa, mutta kertokaa, miten käy :)
 
 ## Ominaisuudet
 
@@ -21,13 +21,10 @@ tarvitsee ylläpitää keskitettyä palvelinta.
   järvillä: rajaa pois esim. mantereesta pois päin puhaltavat (offshore) suunnat
 - ✅ Ennuste seuraaville tunneille mukaan hälytysviestiin (HARMONIE-malli)
 
-**v0.3 (uusinta):**
+**v0.3 :**
 - ✅ **ntfy.sh-kanava** - ilmainen push-ilmoitus puhelimeen, ei API-avainta
 - ✅ **Graafi hälytysviestin mukana** (Telegram-kuva / sähköpostin
   liitetiedosto) - näyttää havaitun tuulen, puuskat ja ennusteen
-- ✅ **Opt-in, anonymisoitu käyttötelemetria** - kaksoisvarmistettu
-  pois päältä oletuksena, karkea sijainti, ei PII:tä
-  (ks. [PRIVACY.md](PRIVACY.md) ja [docs/telemetry.md](docs/telemetry.md))
 
 **Kaikissa versioissa:**
 - ✅ Telegram- ja sähköpostikanavat, plugin-arkkitehtuurilla uusien
@@ -43,7 +40,7 @@ Valitse yksi kolmesta hostauspolusta sen mukaan, mikä sopii sinulle:
 
 | Tilanne | Polku |
 |---|---|
-| "En halua omaa palvelinta" | 👉 [docs/hosting-github-actions.md](docs/hosting-github-actions.md) - ilmainen, ei laitetta tarvita |
+| "En halua omaa palvelinta" | 👉 [docs/hosting-github-actions.md](docs/hosting-github-actions.md) - ilmainen, ei tarvita mitään laitetta |
 | "Minulla on Raspberry Pi / VPS / kotipalvelin" | 👉 [docs/hosting-self-host.md](docs/hosting-self-host.md) - cron tai systemd |
 | "Haluan Dockerin" | 👉 [docker/](docker/) - Dockerfile + compose |
 
