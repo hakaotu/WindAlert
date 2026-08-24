@@ -1,10 +1,14 @@
 {
-  "state": "IDLE",
-  "last_alert_at": null,
+  "state": "ALERTED",
+  "last_alert_at": "2026-08-24T15:07:00+00:00",
   "recent_readings": [
     {
       "ts": "2026-08-24T14:46:00+00:00",
       "speed": 7.1
+    },
+    {
+      "ts": "2026-08-24T15:07:00+00:00",
+      "speed": 9.0
     }
   ]
 }
