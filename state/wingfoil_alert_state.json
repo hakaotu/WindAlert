@@ -1,5 +1,10 @@
 {
   "state": "IDLE",
   "last_alert_at": null,
-  "recent_readings": []
+  "recent_readings": [
+    {
+      "ts": "2026-08-24T14:46:00+00:00",
+      "speed": 7.1
+    }
+  ]
 }
