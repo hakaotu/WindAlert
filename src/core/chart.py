@@ -64,6 +64,16 @@ def generate_wind_chart(
             linestyle=":",
             linewidth=2,
         )
+        gust_forecast = [p for p in valid_forecast if p.gust_ms is not None]
+        if gust_forecast:
+            ax.plot(
+                [p.timestamp for p in gust_forecast],
+                [p.gust_ms for p in gust_forecast],
+                label="Puuska (ennuste)",
+                color="#ff7f0e",
+                alpha=0.4,
+                linestyle="-.",
+            )
 
     if wind_cfg is not None:
         ax.axhline(wind_cfg.min_speed_ms, color="green", linestyle="--", alpha=0.5, label="Alaraja")
