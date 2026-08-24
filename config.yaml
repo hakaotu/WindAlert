@@ -6,10 +6,10 @@
 # turvallista committoida julkiseen gittiin.
 
 location:
-  name: "Rautalampi"          # näkyy viesteissä
-  latitude: 62.68
-  longitude: 26.35
-  # fmi_station_id: 101311    # valinnainen - jos jätät pois, lähin asema haetaan automaattisesti
+  name: "Tampere, Siilinkari"  # näkyy viesteissä
+  latitude: 61.5177
+  longitude: 23.7538
+  fmi_station_id: 101311      # Tampere Siilinkari -asema (siinä on tuulimittari)
 
 wind:
   min_speed_ms: 6.0           # alaraja, josta lähtien tuuli on "ajokelpoista"
