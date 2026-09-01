@@ -70,6 +70,19 @@ def build_start_alert(
     )
 
 
+def build_still_alert(reading: WindReading, location: LocationConfig) -> Alert:
+    compass = deg_to_compass(reading.direction_deg)
+    gust_part = f", puuskat {reading.gust_ms:.1f} m/s" if reading.gust_ms else ""
+    return Alert(
+        title=f"Yhä ajokelpoista - {location.name}",
+        body=(
+            f"🏄 Tuuli on edelleen ajokelpoista - {location.name}.\n"
+            f"Tuuli: {reading.speed_ms:.1f} m/s{gust_part}, suunta {compass}."
+        ),
+        severity="wind_still",
+    )
+
+
 def build_stop_alert(reading: WindReading, location: LocationConfig) -> Alert:
     speed_part = f" ({reading.speed_ms:.1f} m/s)" if reading.speed_ms is not None else ""
     return Alert(

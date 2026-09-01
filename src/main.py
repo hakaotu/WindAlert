@@ -144,6 +144,8 @@ def run(config_path: str) -> int:
                 latest, forecast, cfg.location, cfg.wind, cfg.forecast,
                 observations=observations, chart_cfg=cfg.chart,
             )
+        elif decision.new_severity == "wind_still":
+            alert = message.build_still_alert(latest, cfg.location)
         else:
             alert = message.build_stop_alert(latest, cfg.location)
         send_alert(alert, notifiers)

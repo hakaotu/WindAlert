@@ -27,6 +27,7 @@ class HysteresisState:
     state: str = AlertState.IDLE.value
     last_alert_at: Optional[str] = None
     recent_readings: list[dict] = field(default_factory=list)  # [{ts, speed}]
+    last_reminder_at: Optional[str] = None
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), indent=2)
@@ -95,7 +96,7 @@ def evaluate(
 
     if not latest.is_valid:
         # Missing data: don't change state, don't notify, just persist as-is.
-        return Decision(False, None, HysteresisState(current_state.value, state.last_alert_at, recent))
+        return Decision(False, None, HysteresisState(current_state.value, state.last_alert_at, recent, state.last_reminder_at))
 
     in_speed_band = wind_cfg.min_speed_ms <= latest.speed_ms <= wind_cfg.max_speed_ms
     direction_ok = _direction_ok(latest, wind_cfg.direction_filter)
@@ -115,12 +116,27 @@ def evaluate(
             and direction_ok
             and sustained_minutes >= wind_cfg.hysteresis.min_minutes_above
         ):
-            new_state = HysteresisState(AlertState.ALERTED.value, now.isoformat(), recent)
+            new_state = HysteresisState(AlertState.ALERTED.value, now.isoformat(), recent, last_reminder_at=None)
             return Decision(True, "wind_start", new_state)
-        return Decision(False, None, HysteresisState(current_state.value, state.last_alert_at, recent))
+        return Decision(False, None, HysteresisState(current_state.value, state.last_alert_at, recent, state.last_reminder_at))
 
     else:  # ALERTED
         if latest.speed_ms < release_threshold or not direction_ok or latest.speed_ms > wind_cfg.max_speed_ms:
-            new_state = HysteresisState(AlertState.IDLE.value, state.last_alert_at, recent)
+            new_state = HysteresisState(AlertState.IDLE.value, state.last_alert_at, recent, last_reminder_at=None)
             return Decision(True, "wind_stop", new_state)
-        return Decision(False, None, HysteresisState(current_state.value, state.last_alert_at, recent))
+
+        # Still alerted and still good: optionally ping again periodically so
+        # a long calm stretch of "still fine" doesn't look like silence/death.
+        reminder_minutes = wind_cfg.hysteresis.reminder_interval_minutes
+        if reminder_minutes > 0:
+            last_notified = state.last_reminder_at or state.last_alert_at
+            due = last_notified is None or (
+                (now.timestamp() - datetime.fromisoformat(last_notified).timestamp()) / 60 >= reminder_minutes
+            )
+            if due:
+                new_state = HysteresisState(
+                    AlertState.ALERTED.value, state.last_alert_at, recent, last_reminder_at=now.isoformat()
+                )
+                return Decision(True, "wind_still", new_state)
+
+        return Decision(False, None, HysteresisState(current_state.value, state.last_alert_at, recent, state.last_reminder_at))

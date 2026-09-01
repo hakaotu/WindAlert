@@ -97,6 +97,44 @@ def test_missing_data_does_not_change_state_or_crash():
     assert decision.new_state.state == AlertState.ALERTED.value
 
 
+def test_reminder_fires_after_interval_while_still_alerted():
+    cfg = make_wind_cfg(
+        hysteresis=HysteresisConfig(
+            trigger_margin_ms=0.5, release_margin_ms=1.0, min_minutes_above=10,
+            reminder_interval_minutes=120,
+        )
+    )
+    last_alert_at = (datetime.now(timezone.utc) - timedelta(minutes=130)).isoformat()
+    state = HysteresisState(state=AlertState.ALERTED.value, last_alert_at=last_alert_at)
+    decision = evaluate(reading(7.0), state, cfg)
+    assert decision.should_notify is True
+    assert decision.new_severity == "wind_still"
+    assert decision.new_state.state == AlertState.ALERTED.value
+    assert decision.new_state.last_reminder_at is not None
+
+
+def test_no_reminder_before_interval_elapsed():
+    cfg = make_wind_cfg(
+        hysteresis=HysteresisConfig(
+            trigger_margin_ms=0.5, release_margin_ms=1.0, min_minutes_above=10,
+            reminder_interval_minutes=120,
+        )
+    )
+    last_alert_at = (datetime.now(timezone.utc) - timedelta(minutes=30)).isoformat()
+    state = HysteresisState(state=AlertState.ALERTED.value, last_alert_at=last_alert_at)
+    decision = evaluate(reading(7.0), state, cfg)
+    assert decision.should_notify is False
+    assert decision.new_state.state == AlertState.ALERTED.value
+
+
+def test_reminder_disabled_by_default():
+    cfg = make_wind_cfg()  # reminder_interval_minutes defaults to 0
+    last_alert_at = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    state = HysteresisState(state=AlertState.ALERTED.value, last_alert_at=last_alert_at)
+    decision = evaluate(reading(7.0), state, cfg)
+    assert decision.should_notify is False
+
+
 def test_too_strong_wind_releases_alert():
     """Above max_speed_ms should also release (too dangerous), not just below min."""
     cfg = make_wind_cfg()

@@ -21,6 +21,7 @@ wind:
     trigger_margin_ms: 0.5    # hälytys vasta kun tuuli ylittää min_speed_ms + tämä
     release_margin_ms: 1.0    # "tuuli loppui" vasta kun alitetaan min_speed_ms - tämä
     min_minutes_above: 10     # estää hälytyksen yksittäisestä puuskasta
+    reminder_interval_minutes: 120  # muistutus "vielä ajokelpoista" tämän välein; 0 = pois päältä
 
 forecast:
   enabled: true

@@ -50,6 +50,7 @@ class HysteresisConfig:
     trigger_margin_ms: float = 0.5
     release_margin_ms: float = 1.0
     min_minutes_above: int = 10
+    reminder_interval_minutes: int = 0  # 0 = disabled; e.g. 120 = "still good" ping every 2h
 
 
 @dataclass
@@ -154,6 +155,7 @@ def load_config(path: str) -> AppConfig:
                 trigger_margin_ms=float(hyst_raw.get("trigger_margin_ms", 0.5)),
                 release_margin_ms=float(hyst_raw.get("release_margin_ms", 1.0)),
                 min_minutes_above=int(hyst_raw.get("min_minutes_above", 10)),
+                reminder_interval_minutes=int(hyst_raw.get("reminder_interval_minutes", 0)),
             ),
         )
 
