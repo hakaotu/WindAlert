@@ -88,7 +88,7 @@ WindAlert/
 │   ├── adding-a-notifier.md
 │   └── telemetry.md
 └── tests/
-    ├── test_hysteresis.py       # 8 testiä
+    ├── test_hysteresis.py       # 13 testiä
     ├── test_config.py           # 4 testiä
     ├── test_chart.py            # 3 testiä
     ├── test_telemetry.py        # 5 testiä
@@ -99,16 +99,26 @@ WindAlert/
 
 `core/hysteresis.py`:n tilakone (`AlertState.IDLE` / `AlertState.ALERTED`):
 
-- **IDLE → ALERTED**: vaatii, että vähintään kaksi peräkkäistä mittausta
+- **IDLE → ALERTED**: vaatii, että vähintään kaksi mittausta
   ylittää `min_speed_ms + trigger_margin_ms`, ja niiden aikaleimojen
   välinen kesto on ≥ `min_minutes_above`. Yksittäinen mittaus ei
   koskaan riitä - tämä oli myös yksi kehityksen aikana löytynyt ja
   testissä (`test_single_spike_does_not_trigger`) kiinni jäänyt bugi.
+  Tämä "sustained"-tarkistus lasketaan **FMI:n tämän ajon
+  havaintohistoriasta** (10 min resoluutio, `required_window_minutes()`
+  verran lookbackia), ei edellisten prosessiajojen väliltä kertyneestä
+  tilasta - GitHub Actionsin `schedule`-triggeri on best-effort ja voi
+  hiljaisella reposilla venyä useiden tuntien mittaisiksi väleiksi, jolloin
+  ajojen välinen kertymä ei koskaan ehtisi näyttää kestoa.
 - **ALERTED → IDLE**: joko tuuli alittaa `min_speed_ms - release_margin_ms`,
   ylittää `max_speed_ms`, tai suunta ei enää täytä `direction_filter`-ehtoa.
+- **ALERTED-tilan muistutus**: jos `reminder_interval_minutes` > 0 ja tuuli
+  on pysynyt hyvänä sen verran pitkään ilman uutta hälytystä/muistutusta,
+  lähtee `wind_still`-ilmoitus ilman tilan vaihtumista.
 - **Puuttuva data**: ei muuta tilaa, ei lähetä ilmoitusta, ei kaada ohjelmaa.
 - **Tila persistoidaan** JSON-tiedostoon (`state_path`), koska jokainen
-  cron-/systemd-/Actions-ajo on erillinen prosessi.
+  cron-/systemd-/Actions-ajo on erillinen prosessi. Persistoitu tila
+  sisältää enää vain IDLE/ALERTED-siirtymän ajankohdat, ei havaintohistoriaa.
 
 ## 5. Ilmoituskanavat - toteutunut vertailu
 

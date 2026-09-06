@@ -30,7 +30,7 @@ def reading(speed, minutes_ago=0, direction=225.0):
 def test_no_alert_below_threshold():
     cfg = make_wind_cfg()
     state = HysteresisState()
-    decision = evaluate(reading(4.0), state, cfg)
+    decision = evaluate(reading(4.0), [reading(4.0)], state, cfg)
     assert decision.should_notify is False
     assert decision.new_state.state == AlertState.IDLE.value
 
@@ -39,22 +39,30 @@ def test_single_spike_does_not_trigger():
     """One reading above threshold with no sustained history must not alert."""
     cfg = make_wind_cfg()
     state = HysteresisState()
-    decision = evaluate(reading(7.0), state, cfg)
+    decision = evaluate(reading(7.0), [reading(7.0)], state, cfg)
     assert decision.should_notify is False
 
 
 def test_sustained_wind_triggers_alert():
     cfg = make_wind_cfg()
-    # Simulate 20 minutes of history already above trigger threshold (6.5 m/s).
-    history = [
-        {"ts": (datetime.now(timezone.utc) - timedelta(minutes=m)).isoformat(), "speed": 7.0}
-        for m in (20, 10)
-    ]
-    state = HysteresisState(state=AlertState.IDLE.value, recent_readings=history)
-    decision = evaluate(reading(7.2), state, cfg)
+    # This run's FMI fetch already covers 20 minutes of history above the
+    # trigger threshold (6.5 m/s) - no need for state accumulated across runs.
+    observations = [reading(7.0, minutes_ago=m) for m in (20, 10, 0)]
+    state = HysteresisState(state=AlertState.IDLE.value)
+    decision = evaluate(reading(7.2), observations, state, cfg)
     assert decision.should_notify is True
     assert decision.new_severity == "wind_start"
     assert decision.new_state.state == AlertState.ALERTED.value
+
+
+def test_sustained_check_ignores_readings_outside_window():
+    """Old readings from outside the lookback window shouldn't count towards
+    'sustained', even if this run happens to fetch them (e.g. chart lookback)."""
+    cfg = make_wind_cfg()
+    observations = [reading(7.0, minutes_ago=120), reading(7.2, minutes_ago=0)]
+    state = HysteresisState(state=AlertState.IDLE.value)
+    decision = evaluate(reading(7.2), observations, state, cfg)
+    assert decision.should_notify is False
 
 
 def test_release_requires_margin_not_just_below_min():
@@ -62,7 +70,7 @@ def test_release_requires_margin_not_just_below_min():
     because release_margin_ms is 1.0 -> release threshold is 5.0."""
     cfg = make_wind_cfg()
     state = HysteresisState(state=AlertState.ALERTED.value, last_alert_at="2026-01-01T10:00:00+00:00")
-    decision = evaluate(reading(5.5), state, cfg)
+    decision = evaluate(reading(5.5), [reading(5.5)], state, cfg)
     assert decision.should_notify is False
     assert decision.new_state.state == AlertState.ALERTED.value
 
@@ -70,7 +78,7 @@ def test_release_requires_margin_not_just_below_min():
 def test_release_below_margin_triggers_stop_alert():
     cfg = make_wind_cfg()
     state = HysteresisState(state=AlertState.ALERTED.value, last_alert_at="2026-01-01T10:00:00+00:00")
-    decision = evaluate(reading(4.5), state, cfg)
+    decision = evaluate(reading(4.5), [reading(4.5)], state, cfg)
     assert decision.should_notify is True
     assert decision.new_severity == "wind_stop"
     assert decision.new_state.state == AlertState.IDLE.value
@@ -78,13 +86,10 @@ def test_release_below_margin_triggers_stop_alert():
 
 def test_wrong_direction_blocks_alert():
     cfg = make_wind_cfg(direction_filter=["SW", "W", "NW"])
-    history = [
-        {"ts": (datetime.now(timezone.utc) - timedelta(minutes=m)).isoformat(), "speed": 7.0}
-        for m in (20, 10)
-    ]
-    state = HysteresisState(state=AlertState.IDLE.value, recent_readings=history)
+    observations = [reading(7.0, minutes_ago=m, direction=90.0) for m in (20, 10, 0)]
+    state = HysteresisState(state=AlertState.IDLE.value)
     # direction=90 -> East, not in allowed list
-    decision = evaluate(reading(7.2, direction=90.0), state, cfg)
+    decision = evaluate(reading(7.2, direction=90.0), observations, state, cfg)
     assert decision.should_notify is False
 
 
@@ -92,7 +97,7 @@ def test_missing_data_does_not_change_state_or_crash():
     cfg = make_wind_cfg()
     state = HysteresisState(state=AlertState.ALERTED.value)
     bad_reading = WindReading(timestamp=datetime.now(timezone.utc), speed_ms=None, gust_ms=None, direction_deg=None)
-    decision = evaluate(bad_reading, state, cfg)
+    decision = evaluate(bad_reading, [bad_reading], state, cfg)
     assert decision.should_notify is False
     assert decision.new_state.state == AlertState.ALERTED.value
 
@@ -106,7 +111,7 @@ def test_reminder_fires_after_interval_while_still_alerted():
     )
     last_alert_at = (datetime.now(timezone.utc) - timedelta(minutes=130)).isoformat()
     state = HysteresisState(state=AlertState.ALERTED.value, last_alert_at=last_alert_at)
-    decision = evaluate(reading(7.0), state, cfg)
+    decision = evaluate(reading(7.0), [reading(7.0)], state, cfg)
     assert decision.should_notify is True
     assert decision.new_severity == "wind_still"
     assert decision.new_state.state == AlertState.ALERTED.value
@@ -122,7 +127,7 @@ def test_no_reminder_before_interval_elapsed():
     )
     last_alert_at = (datetime.now(timezone.utc) - timedelta(minutes=30)).isoformat()
     state = HysteresisState(state=AlertState.ALERTED.value, last_alert_at=last_alert_at)
-    decision = evaluate(reading(7.0), state, cfg)
+    decision = evaluate(reading(7.0), [reading(7.0)], state, cfg)
     assert decision.should_notify is False
     assert decision.new_state.state == AlertState.ALERTED.value
 
@@ -131,7 +136,7 @@ def test_reminder_disabled_by_default():
     cfg = make_wind_cfg()  # reminder_interval_minutes defaults to 0
     last_alert_at = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
     state = HysteresisState(state=AlertState.ALERTED.value, last_alert_at=last_alert_at)
-    decision = evaluate(reading(7.0), state, cfg)
+    decision = evaluate(reading(7.0), [reading(7.0)], state, cfg)
     assert decision.should_notify is False
 
 
@@ -139,6 +144,19 @@ def test_too_strong_wind_releases_alert():
     """Above max_speed_ms should also release (too dangerous), not just below min."""
     cfg = make_wind_cfg()
     state = HysteresisState(state=AlertState.ALERTED.value)
-    decision = evaluate(reading(20.0), state, cfg)
+    decision = evaluate(reading(20.0), [reading(20.0)], state, cfg)
     assert decision.should_notify is True
     assert decision.new_severity == "wind_stop"
+
+
+def test_old_state_file_without_recent_readings_field_loads_cleanly():
+    """Old persisted state files had a recent_readings key that no longer
+    exists on the dataclass - loading one must not crash the whole run."""
+    from core.hysteresis import HysteresisState as HS
+    old_json = (
+        '{"state": "IDLE", "last_alert_at": null, '
+        '"recent_readings": [{"ts": "2026-01-01T10:00:00+00:00", "speed": 7.0}], '
+        '"last_reminder_at": null}'
+    )
+    state = HS.from_json(old_json)
+    assert state.state == AlertState.IDLE.value

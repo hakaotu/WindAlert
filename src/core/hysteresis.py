@@ -2,21 +2,30 @@
 
 Why this exists: without hysteresis, wind hovering right around the
 threshold would trigger a notification every single poll, which is
-useless and annoying. This module tracks a small history of recent
-readings and only transitions IDLE -> ALERTED once wind has been above
-threshold for a minimum duration, and only transitions back once it has
-dropped meaningfully below it (release_margin), not just barely under.
+useless and annoying. This module only transitions IDLE -> ALERTED once
+wind has been above threshold for a minimum duration, and only
+transitions back once it has dropped meaningfully below it
+(release_margin), not just barely under.
 
-State is persisted to JSON on disk so it survives between separate
-process runs (cron, GitHub Actions, etc. - each run is a fresh process).
+The "sustained duration" check is computed from the wind observations
+FMI returns for THIS run (10-min resolution over the lookback window),
+not from history accumulated across separate process runs. GitHub
+Actions' `schedule` trigger is best-effort and can be delayed by hours
+on quiet repos, so a run-to-run accumulator would see runs too far
+apart to ever prove "sustained" - using FMI's own history sidesteps
+that entirely.
+
+State (just the IDLE/ALERTED transition points) is persisted to JSON on
+disk so it survives between separate process runs (cron, GitHub
+Actions, etc. - each run is a fresh process).
 """
 from __future__ import annotations
 
 import json
 import os
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, fields
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Sequence
 
 from .config import WindConfig
 from .models import AlertState, WindReading, deg_to_compass
@@ -26,7 +35,6 @@ from .models import AlertState, WindReading, deg_to_compass
 class HysteresisState:
     state: str = AlertState.IDLE.value
     last_alert_at: Optional[str] = None
-    recent_readings: list[dict] = field(default_factory=list)  # [{ts, speed}]
     last_reminder_at: Optional[str] = None
 
     def to_json(self) -> str:
@@ -35,7 +43,8 @@ class HysteresisState:
     @classmethod
     def from_json(cls, text: str) -> "HysteresisState":
         data = json.loads(text)
-        return cls(**data)
+        known = {f.name for f in fields(cls)}
+        return cls(**{k: v for k, v in data.items() if k in known})
 
 
 def load_state(path: str) -> HysteresisState:
@@ -60,8 +69,17 @@ def save_state(path: str, state: HysteresisState) -> None:
 @dataclass
 class Decision:
     should_notify: bool
-    new_severity: Optional[str]  # "wind_start" | "wind_stop" | None
+    new_severity: Optional[str]  # "wind_start" | "wind_still" | "wind_stop" | None
     new_state: HysteresisState
+
+
+def required_window_minutes(wind_cfg: WindConfig) -> int:
+    """How much observation history the sustained-duration check needs.
+
+    Callers fetching from FMI must request at least this much lookback,
+    or there won't be enough data points to ever prove "sustained".
+    """
+    return max(wind_cfg.hysteresis.min_minutes_above * 2, 30)
 
 
 def _direction_ok(reading: WindReading, allowed: list[str]) -> bool:
@@ -74,37 +92,35 @@ def _direction_ok(reading: WindReading, allowed: list[str]) -> bool:
 
 def evaluate(
     latest: WindReading,
+    observations: Sequence[WindReading],
     state: HysteresisState,
     wind_cfg: WindConfig,
 ) -> Decision:
-    """Feed the latest reading into the state machine and decide whether
-    to fire a notification this run.
+    """Feed the latest reading (+ this run's observation history) into the
+    state machine and decide whether to fire a notification this run.
     """
     now = latest.timestamp
     trigger_threshold = wind_cfg.min_speed_ms + wind_cfg.hysteresis.trigger_margin_ms
     release_threshold = wind_cfg.min_speed_ms - wind_cfg.hysteresis.release_margin_ms
 
-    # Keep a rolling window of recent readings for the min_minutes_above check.
-    recent = list(state.recent_readings)
-    if latest.is_valid:
-        recent.append({"ts": now.isoformat(), "speed": latest.speed_ms})
-    window_minutes = max(wind_cfg.hysteresis.min_minutes_above * 2, 30)
-    cutoff = now.timestamp() - window_minutes * 60
-    recent = [r for r in recent if datetime.fromisoformat(r["ts"]).timestamp() >= cutoff]
-
     current_state = AlertState(state.state)
 
     if not latest.is_valid:
         # Missing data: don't change state, don't notify, just persist as-is.
-        return Decision(False, None, HysteresisState(current_state.value, state.last_alert_at, recent, state.last_reminder_at))
+        return Decision(False, None, HysteresisState(current_state.value, state.last_alert_at, state.last_reminder_at))
 
     in_speed_band = wind_cfg.min_speed_ms <= latest.speed_ms <= wind_cfg.max_speed_ms
     direction_ok = _direction_ok(latest, wind_cfg.direction_filter)
 
     if current_state == AlertState.IDLE:
-        above_trigger = [r for r in recent if r["speed"] >= trigger_threshold]
+        window_minutes = required_window_minutes(wind_cfg)
+        cutoff = now.timestamp() - window_minutes * 60
+        above_trigger = [
+            r for r in observations
+            if r.is_valid and r.speed_ms >= trigger_threshold and r.timestamp.timestamp() >= cutoff
+        ]
         if len(above_trigger) >= 2:
-            timestamps = [datetime.fromisoformat(r["ts"]).timestamp() for r in above_trigger]
+            timestamps = [r.timestamp.timestamp() for r in above_trigger]
             sustained_minutes = (max(timestamps) - min(timestamps)) / 60
         else:
             # A single reading can't demonstrate a sustained duration yet,
@@ -116,13 +132,13 @@ def evaluate(
             and direction_ok
             and sustained_minutes >= wind_cfg.hysteresis.min_minutes_above
         ):
-            new_state = HysteresisState(AlertState.ALERTED.value, now.isoformat(), recent, last_reminder_at=None)
+            new_state = HysteresisState(AlertState.ALERTED.value, now.isoformat(), last_reminder_at=None)
             return Decision(True, "wind_start", new_state)
-        return Decision(False, None, HysteresisState(current_state.value, state.last_alert_at, recent, state.last_reminder_at))
+        return Decision(False, None, HysteresisState(current_state.value, state.last_alert_at, state.last_reminder_at))
 
     else:  # ALERTED
         if latest.speed_ms < release_threshold or not direction_ok or latest.speed_ms > wind_cfg.max_speed_ms:
-            new_state = HysteresisState(AlertState.IDLE.value, state.last_alert_at, recent, last_reminder_at=None)
+            new_state = HysteresisState(AlertState.IDLE.value, state.last_alert_at, last_reminder_at=None)
             return Decision(True, "wind_stop", new_state)
 
         # Still alerted and still good: optionally ping again periodically so
@@ -135,8 +151,8 @@ def evaluate(
             )
             if due:
                 new_state = HysteresisState(
-                    AlertState.ALERTED.value, state.last_alert_at, recent, last_reminder_at=now.isoformat()
+                    AlertState.ALERTED.value, state.last_alert_at, last_reminder_at=now.isoformat()
                 )
                 return Decision(True, "wind_still", new_state)
 
-        return Decision(False, None, HysteresisState(current_state.value, state.last_alert_at, recent, state.last_reminder_at))
+        return Decision(False, None, HysteresisState(current_state.value, state.last_alert_at, state.last_reminder_at))

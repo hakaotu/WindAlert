@@ -112,7 +112,7 @@ def run(config_path: str) -> int:
 
     try:
         fmisid = resolve_station(cfg)
-        lookback = 60
+        lookback = max(60, hysteresis.required_window_minutes(cfg.wind))
         if cfg.chart.enabled:
             lookback = max(lookback, cfg.chart.lookback_hours * 60)
         observations = fmi_client.fetch_observations(fmisid, lookback_minutes=lookback)
@@ -136,7 +136,7 @@ def run(config_path: str) -> int:
             log.warning("Forecast fetch failed (continuing without it): %s", e)
 
     state = hysteresis.load_state(cfg.state_path)
-    decision = hysteresis.evaluate(latest, state, cfg.wind)
+    decision = hysteresis.evaluate(latest, observations, state, cfg.wind)
 
     if decision.should_notify:
         if decision.new_severity == "wind_start":
