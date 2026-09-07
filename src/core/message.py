@@ -30,6 +30,25 @@ def _forecast_summary(forecast: list[ForecastPoint], wind_cfg: WindConfig) -> Op
     return f"Ennusteen mukaan tuuli pysyy sopivana ainakin klo {until_str} asti."
 
 
+def _build_chart_image(
+    observations: Optional[Sequence[WindReading]],
+    forecast: list[ForecastPoint],
+    wind_cfg: WindConfig,
+    chart_cfg: Optional[ChartConfig],
+    title: str,
+) -> Optional[str]:
+    """Shared chart rendering for every alert type: past observations +
+    forecast (mean wind + gusts), same as the original wind_start chart."""
+    if chart_cfg is None or not chart_cfg.enabled or not observations:
+        return None
+    try:
+        tmp_path = tempfile.NamedTemporaryFile(suffix=".png", delete=False).name
+        return generate_wind_chart(observations, forecast, tmp_path, wind_cfg=wind_cfg, title=title)
+    except Exception as e:  # noqa: BLE001 - a chart failure must not block the alert
+        log.warning("Chart generation failed, sending alert without image: %s", e)
+        return None
+
+
 def build_start_alert(
     reading: WindReading,
     forecast: list[ForecastPoint],
@@ -52,15 +71,7 @@ def build_start_alert(
         if summary:
             lines.append(summary)
 
-    image_path = None
-    if chart_cfg is not None and chart_cfg.enabled and observations:
-        try:
-            tmp_path = tempfile.NamedTemporaryFile(suffix=".png", delete=False).name
-            image_path = generate_wind_chart(
-                observations, forecast, tmp_path, wind_cfg=wind_cfg, title=location.name
-            )
-        except Exception as e:  # noqa: BLE001 - a chart failure must not block the alert
-            log.warning("Chart generation failed, sending alert without image: %s", e)
+    image_path = _build_chart_image(observations, forecast, wind_cfg, chart_cfg, location.name)
 
     return Alert(
         title=f"Tuulihälytys - {location.name}",
@@ -70,9 +81,20 @@ def build_start_alert(
     )
 
 
-def build_still_alert(reading: WindReading, location: LocationConfig) -> Alert:
+def build_still_alert(
+    reading: WindReading,
+    location: LocationConfig,
+    wind_cfg: WindConfig,
+    forecast: Optional[list[ForecastPoint]] = None,
+    observations: Optional[Sequence[WindReading]] = None,
+    chart_cfg: Optional[ChartConfig] = None,
+) -> Alert:
     compass = deg_to_compass(reading.direction_deg)
     gust_part = f", puuskat {reading.gust_ms:.1f} m/s" if reading.gust_ms else ""
+    forecast = forecast or []
+
+    image_path = _build_chart_image(observations, forecast, wind_cfg, chart_cfg, location.name)
+
     return Alert(
         title=f"Yhä ajokelpoista - {location.name}",
         body=(
@@ -80,13 +102,28 @@ def build_still_alert(reading: WindReading, location: LocationConfig) -> Alert:
             f"Tuuli: {reading.speed_ms:.1f} m/s{gust_part}, suunta {compass}."
         ),
         severity="wind_still",
+        image_path=image_path,
     )
 
 
-def build_stop_alert(reading: WindReading, location: LocationConfig) -> Alert:
+def build_stop_alert(
+    reading: WindReading,
+    location: LocationConfig,
+    wind_cfg: Optional[WindConfig] = None,
+    forecast: Optional[list[ForecastPoint]] = None,
+    observations: Optional[Sequence[WindReading]] = None,
+    chart_cfg: Optional[ChartConfig] = None,
+) -> Alert:
     speed_part = f" ({reading.speed_ms:.1f} m/s)" if reading.speed_ms is not None else ""
+    forecast = forecast or []
+
+    image_path = None
+    if wind_cfg is not None:
+        image_path = _build_chart_image(observations, forecast, wind_cfg, chart_cfg, location.name)
+
     return Alert(
         title=f"Tuuli laantui - {location.name}",
         body=f"🌬️ Tuuli laski alle asetetun rajan{speed_part}.",
         severity="wind_stop",
+        image_path=image_path,
     )

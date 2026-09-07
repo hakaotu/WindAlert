@@ -145,9 +145,15 @@ def run(config_path: str) -> int:
                 observations=observations, chart_cfg=cfg.chart,
             )
         elif decision.new_severity == "wind_still":
-            alert = message.build_still_alert(latest, cfg.location)
+            alert = message.build_still_alert(
+                latest, cfg.location, cfg.wind,
+                forecast=forecast, observations=observations, chart_cfg=cfg.chart,
+            )
         else:
-            alert = message.build_stop_alert(latest, cfg.location)
+            alert = message.build_stop_alert(
+                latest, cfg.location, cfg.wind,
+                forecast=forecast, observations=observations, chart_cfg=cfg.chart,
+            )
         send_alert(alert, notifiers)
 
         if cfg.telemetry.enabled:
