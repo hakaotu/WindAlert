@@ -1,5 +1,5 @@
 {
-  "state": "ALERTED",
+  "state": "IDLE",
   "last_alert_at": "2026-10-05T11:14:00+00:00",
-  "last_reminder_at": "2026-10-07T17:40:00+00:00"
+  "last_reminder_at": null
 }
