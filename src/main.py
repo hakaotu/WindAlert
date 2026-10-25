@@ -142,13 +142,13 @@ def run(config_path: str) -> int:
         if decision.new_severity == "wind_start":
             alert = message.build_start_alert(
                 latest, forecast, cfg.location, cfg.wind, cfg.forecast,
-                observations=observations, chart_cfg=cfg.chart, spots_cfg=cfg.spots,
+                observations=observations, chart_cfg=cfg.chart, spots_cfg=cfg.spots, windy_cfg=cfg.windy,
             )
         elif decision.new_severity == "wind_still":
             alert = message.build_still_alert(
                 latest, cfg.location, cfg.wind,
                 forecast=forecast, observations=observations, chart_cfg=cfg.chart,
-                spots_cfg=cfg.spots,
+                spots_cfg=cfg.spots, windy_cfg=cfg.windy,
             )
         else:
             alert = message.build_stop_alert(

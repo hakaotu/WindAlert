@@ -6,7 +6,7 @@ import tempfile
 from typing import Optional, Sequence
 
 from .chart import generate_wind_chart
-from .config import ChartConfig, ForecastConfig, LocationConfig, SpotsConfig, WindConfig
+from .config import ChartConfig, ForecastConfig, LocationConfig, SpotsConfig, WindConfig, WindyConfig
 from .models import Alert, ForecastPoint, WindReading, deg_to_compass
 from .spots import spots_summary
 
@@ -59,6 +59,18 @@ def _spots_section(reading: WindReading, spots_cfg: Optional[SpotsConfig]) -> Op
     )
 
 
+def windy_url(location: LocationConfig, zoom: int = 10) -> str:
+    """Windy.com point forecast for the location, wind overlay on the map."""
+    lat, lon = f"{location.latitude:.3f}", f"{location.longitude:.3f}"
+    return f"https://www.windy.com/{lat}/{lon}?wind,{lat},{lon},{zoom}"
+
+
+def _windy_line(location: LocationConfig, windy_cfg: Optional[WindyConfig]) -> Optional[str]:
+    if windy_cfg is None or not windy_cfg.enabled:
+        return None
+    return f"🗺️ Tuulikartta ja mallivertailu: {windy_url(location, windy_cfg.zoom)}"
+
+
 def build_start_alert(
     reading: WindReading,
     forecast: list[ForecastPoint],
@@ -68,6 +80,7 @@ def build_start_alert(
     observations: Optional[Sequence[WindReading]] = None,
     chart_cfg: Optional[ChartConfig] = None,
     spots_cfg: Optional[SpotsConfig] = None,
+    windy_cfg: Optional[WindyConfig] = None,
 ) -> Alert:
     compass = deg_to_compass(reading.direction_deg)
     gust_part = f", puuskat {reading.gust_ms:.1f} m/s" if reading.gust_ms else ""
@@ -85,6 +98,9 @@ def build_start_alert(
     spots_part = _spots_section(reading, spots_cfg)
     if spots_part:
         lines.append(spots_part)
+    windy_part = _windy_line(location, windy_cfg)
+    if windy_part:
+        lines.append(windy_part)
 
     image_path = _build_chart_image(observations, forecast, wind_cfg, chart_cfg, location.name)
 
@@ -104,6 +120,7 @@ def build_still_alert(
     observations: Optional[Sequence[WindReading]] = None,
     chart_cfg: Optional[ChartConfig] = None,
     spots_cfg: Optional[SpotsConfig] = None,
+    windy_cfg: Optional[WindyConfig] = None,
 ) -> Alert:
     compass = deg_to_compass(reading.direction_deg)
     gust_part = f", puuskat {reading.gust_ms:.1f} m/s" if reading.gust_ms else ""
@@ -116,6 +133,9 @@ def build_still_alert(
     spots_part = _spots_section(reading, spots_cfg)
     if spots_part:
         lines.append(spots_part)
+    windy_part = _windy_line(location, windy_cfg)
+    if windy_part:
+        lines.append(windy_part)
 
     image_path = _build_chart_image(observations, forecast, wind_cfg, chart_cfg, location.name)
 

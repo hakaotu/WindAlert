@@ -31,6 +31,10 @@ chart:
   enabled: false             # v0.3: liitä graafi hälytysviestiin (Telegram/Email)
   lookback_hours: 8          # kuinka monen tunnin historia näytetään graafissa
 
+windy:
+  enabled: false             # lisää viestiin linkki windy.com-tuulikarttaan (lokaation koordinaatit, ilmainen)
+  zoom: 10                   # kartan zoomaustaso
+
 spots:
   enabled: false             # suosittele hälytysviestissä mitattuun tuulensuuntaan sopivia spotteja
   max_listed: 3              # montako spottia viestissä näytetään

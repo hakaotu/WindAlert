@@ -82,6 +82,12 @@ class ChartConfig:
 
 
 @dataclass
+class WindyConfig:
+    enabled: bool = False
+    zoom: int = 10
+
+
+@dataclass
 class ScheduleConfig:
     active_hours: str = "0-23"
     poll_interval_minutes: int = 10
@@ -142,6 +148,7 @@ class AppConfig:
     telemetry: TelemetryConfig
     state_path: str = "~/.wingfoil_alert_state.json"
     spots: SpotsConfig = field(default_factory=SpotsConfig)
+    windy: WindyConfig = field(default_factory=WindyConfig)
 
 
 def load_config(path: str) -> AppConfig:
@@ -197,6 +204,12 @@ def load_config(path: str) -> AppConfig:
         chart = ChartConfig(
             enabled=bool(chart_raw.get("enabled", False)),
             lookback_hours=int(chart_raw.get("lookback_hours", 8)),
+        )
+
+        windy_raw = raw.get("windy", {}) or {}
+        windy = WindyConfig(
+            enabled=bool(windy_raw.get("enabled", False)),
+            zoom=int(windy_raw.get("zoom", 10)),
         )
 
         sched_raw = raw.get("schedule", {})
@@ -255,6 +268,7 @@ def load_config(path: str) -> AppConfig:
             telemetry=telemetry,
             state_path=raw.get("state_path", "~/.wingfoil_alert_state.json"),
             spots=spots,
+            windy=windy,
         )
     except KeyError as e:
         raise ConfigError(f"Missing required config key: {e}") from e

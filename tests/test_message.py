@@ -65,3 +65,21 @@ def test_stop_alert_has_no_chart_when_chart_cfg_missing():
     loc = LocationConfig(name="Testi", latitude=60.0, longitude=25.0)
     alert = message.build_stop_alert(make_observations()[-1], loc)
     assert alert.image_path is None
+
+
+def test_start_alert_includes_windy_link_when_enabled():
+    from core.config import ForecastConfig, WindyConfig
+    loc = LocationConfig(name="Testi", latitude=61.5177, longitude=23.7538)
+    observations = make_observations()
+    alert = message.build_start_alert(
+        observations[-1], [], loc, make_wind_cfg(), ForecastConfig(enabled=False),
+        windy_cfg=WindyConfig(enabled=True, zoom=11),
+    )
+    assert "https://www.windy.com/61.518/23.754?wind,61.518,23.754,11" in alert.body
+
+
+def test_still_alert_has_no_windy_link_by_default():
+    loc = LocationConfig(name="Testi", latitude=61.5, longitude=23.7)
+    observations = make_observations()
+    alert = message.build_still_alert(observations[-1], loc, make_wind_cfg())
+    assert "windy.com" not in alert.body
