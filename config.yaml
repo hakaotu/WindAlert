@@ -26,6 +26,7 @@ wind:
 forecast:
   enabled: true
   hours_ahead: 12
+  compare_models: ["ecmwf_ifs025", "icon_seamless"]  # vertailumallit graafiin Open-Meteosta (ilmainen, ei avainta), esim. ecmwf_ifs025, icon_seamless, gfs_seamless
 
 chart:
   enabled: true             # v0.3: liitä graafi hälytysviestiin (Telegram/Email)

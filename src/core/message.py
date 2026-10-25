@@ -37,6 +37,7 @@ def _build_chart_image(
     wind_cfg: WindConfig,
     chart_cfg: Optional[ChartConfig],
     title: str,
+    model_forecasts: Optional[dict[str, list[ForecastPoint]]] = None,
 ) -> Optional[str]:
     """Shared chart rendering for every alert type: past observations +
     forecast (mean wind + gusts), same as the original wind_start chart."""
@@ -46,7 +47,7 @@ def _build_chart_image(
         tmp_path = tempfile.NamedTemporaryFile(suffix=".png", delete=False).name
         return generate_wind_chart(
             observations, forecast, tmp_path, wind_cfg=wind_cfg, title=title,
-            table_hours=chart_cfg.forecast_table_hours,
+            table_hours=chart_cfg.forecast_table_hours, model_forecasts=model_forecasts,
         )
     except Exception as e:  # noqa: BLE001 - a chart failure must not block the alert
         log.warning("Chart generation failed, sending alert without image: %s", e)
@@ -84,6 +85,7 @@ def build_start_alert(
     chart_cfg: Optional[ChartConfig] = None,
     spots_cfg: Optional[SpotsConfig] = None,
     windy_cfg: Optional[WindyConfig] = None,
+    model_forecasts: Optional[dict[str, list[ForecastPoint]]] = None,
 ) -> Alert:
     compass = deg_to_compass(reading.direction_deg)
     gust_part = f", puuskat {reading.gust_ms:.1f} m/s" if reading.gust_ms else ""
@@ -105,7 +107,9 @@ def build_start_alert(
     if windy_part:
         lines.append(windy_part)
 
-    image_path = _build_chart_image(observations, forecast, wind_cfg, chart_cfg, location.name)
+    image_path = _build_chart_image(
+        observations, forecast, wind_cfg, chart_cfg, location.name, model_forecasts,
+    )
 
     return Alert(
         title=f"Tuulihälytys - {location.name}",
@@ -124,6 +128,7 @@ def build_still_alert(
     chart_cfg: Optional[ChartConfig] = None,
     spots_cfg: Optional[SpotsConfig] = None,
     windy_cfg: Optional[WindyConfig] = None,
+    model_forecasts: Optional[dict[str, list[ForecastPoint]]] = None,
 ) -> Alert:
     compass = deg_to_compass(reading.direction_deg)
     gust_part = f", puuskat {reading.gust_ms:.1f} m/s" if reading.gust_ms else ""
@@ -140,7 +145,9 @@ def build_still_alert(
     if windy_part:
         lines.append(windy_part)
 
-    image_path = _build_chart_image(observations, forecast, wind_cfg, chart_cfg, location.name)
+    image_path = _build_chart_image(
+        observations, forecast, wind_cfg, chart_cfg, location.name, model_forecasts,
+    )
 
     return Alert(
         title=f"Yhä ajokelpoista - {location.name}",
@@ -157,13 +164,16 @@ def build_stop_alert(
     forecast: Optional[list[ForecastPoint]] = None,
     observations: Optional[Sequence[WindReading]] = None,
     chart_cfg: Optional[ChartConfig] = None,
+    model_forecasts: Optional[dict[str, list[ForecastPoint]]] = None,
 ) -> Alert:
     speed_part = f" ({reading.speed_ms:.1f} m/s)" if reading.speed_ms is not None else ""
     forecast = forecast or []
 
     image_path = None
     if wind_cfg is not None:
-        image_path = _build_chart_image(observations, forecast, wind_cfg, chart_cfg, location.name)
+        image_path = _build_chart_image(
+        observations, forecast, wind_cfg, chart_cfg, location.name, model_forecasts,
+    )
 
     return Alert(
         title=f"Tuuli laantui - {location.name}",

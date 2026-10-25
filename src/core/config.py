@@ -73,6 +73,7 @@ class LocationConfig:
 class ForecastConfig:
     enabled: bool = True
     hours_ahead: int = 6
+    compare_models: list[str] = field(default_factory=list)  # Open-Meteo model ids, e.g. ["ecmwf_ifs025"]
 
 
 @dataclass
@@ -199,6 +200,7 @@ def load_config(path: str) -> AppConfig:
         forecast = ForecastConfig(
             enabled=bool(forecast_raw.get("enabled", True)),
             hours_ahead=int(forecast_raw.get("hours_ahead", 6)),
+            compare_models=list(forecast_raw.get("compare_models", []) or []),
         )
 
         chart_raw = raw.get("chart", {})

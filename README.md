@@ -79,6 +79,16 @@ keskelle tuuli osuu, menevät niiden ohi, joissa suunta on vasta rajoilla.
 Huom: suositus käyttää lokaation (esim. Siilinkarin) mittausasemaa,
 joten paikallinen suunta spotilla voi poiketa.
 
+### Ennustetaulukko ja mallivertailu
+
+`chart.forecast_table_hours` lisää graafin alle Windy-tyylisen
+tuntitaulukon: tuuli ja puuskat väritetyissä soluissa, suuntanuoli ja
+"sopiva"-rivi asetettujen rajojen mukaan. `forecast.compare_models`
+lisää taulukkoon ja graafiin muiden sääennustemallien (esim. ECMWF,
+ICON) tuuliennusteen [Open-Meteosta](https://open-meteo.com) - ilmainen
+ei-kaupalliseen käyttöön, ei API-avainta. Jos haku epäonnistuu,
+hälytys lähtee ilman vertailua.
+
 ## Arkkitehtuuri lyhyesti
 
 ```
