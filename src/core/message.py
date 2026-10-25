@@ -6,8 +6,9 @@ import tempfile
 from typing import Optional, Sequence
 
 from .chart import generate_wind_chart
-from .config import ChartConfig, ForecastConfig, LocationConfig, WindConfig
+from .config import ChartConfig, ForecastConfig, LocationConfig, SpotsConfig, WindConfig
 from .models import Alert, ForecastPoint, WindReading, deg_to_compass
+from .spots import spots_summary
 
 log = logging.getLogger(__name__)
 
@@ -49,6 +50,15 @@ def _build_chart_image(
         return None
 
 
+def _spots_section(reading: WindReading, spots_cfg: Optional[SpotsConfig]) -> Optional[str]:
+    if spots_cfg is None or not spots_cfg.enabled:
+        return None
+    return spots_summary(
+        spots_cfg.spots, reading.direction_deg,
+        max_listed=spots_cfg.max_listed, favorites_only=spots_cfg.favorites_only,
+    )
+
+
 def build_start_alert(
     reading: WindReading,
     forecast: list[ForecastPoint],
@@ -57,6 +67,7 @@ def build_start_alert(
     forecast_cfg: ForecastConfig,
     observations: Optional[Sequence[WindReading]] = None,
     chart_cfg: Optional[ChartConfig] = None,
+    spots_cfg: Optional[SpotsConfig] = None,
 ) -> Alert:
     compass = deg_to_compass(reading.direction_deg)
     gust_part = f", puuskat {reading.gust_ms:.1f} m/s" if reading.gust_ms else ""
@@ -70,6 +81,10 @@ def build_start_alert(
         summary = _forecast_summary(forecast, wind_cfg)
         if summary:
             lines.append(summary)
+
+    spots_part = _spots_section(reading, spots_cfg)
+    if spots_part:
+        lines.append(spots_part)
 
     image_path = _build_chart_image(observations, forecast, wind_cfg, chart_cfg, location.name)
 
@@ -88,19 +103,25 @@ def build_still_alert(
     forecast: Optional[list[ForecastPoint]] = None,
     observations: Optional[Sequence[WindReading]] = None,
     chart_cfg: Optional[ChartConfig] = None,
+    spots_cfg: Optional[SpotsConfig] = None,
 ) -> Alert:
     compass = deg_to_compass(reading.direction_deg)
     gust_part = f", puuskat {reading.gust_ms:.1f} m/s" if reading.gust_ms else ""
     forecast = forecast or []
 
+    lines = [
+        f"🏄 Tuuli on edelleen ajokelpoista - {location.name}.",
+        f"Tuuli: {reading.speed_ms:.1f} m/s{gust_part}, suunta {compass}.",
+    ]
+    spots_part = _spots_section(reading, spots_cfg)
+    if spots_part:
+        lines.append(spots_part)
+
     image_path = _build_chart_image(observations, forecast, wind_cfg, chart_cfg, location.name)
 
     return Alert(
         title=f"Yhä ajokelpoista - {location.name}",
-        body=(
-            f"🏄 Tuuli on edelleen ajokelpoista - {location.name}.\n"
-            f"Tuuli: {reading.speed_ms:.1f} m/s{gust_part}, suunta {compass}."
-        ),
+        body="\n".join(lines),
         severity="wind_still",
         image_path=image_path,
     )

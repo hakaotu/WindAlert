@@ -99,6 +99,33 @@ class NotifierChannelConfig:
 
 
 @dataclass
+class SpotConfig:
+    name: str
+    direction_ranges: list[tuple[float, float]]  # clockwise (start, end) degrees, may wrap over 0
+    url: Optional[str] = None
+    favorite: bool = False
+
+
+@dataclass
+class SpotsConfig:
+    enabled: bool = False
+    max_listed: int = 3
+    favorites_only: bool = False
+    spots: list[SpotConfig] = field(default_factory=list)
+
+
+def _parse_direction_range(value: Any) -> tuple[float, float]:
+    """'300-350' / '325-15' -> (300.0, 350.0) / (325.0, 15.0)."""
+    match = re.fullmatch(r"\s*(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s*°?\s*", str(value))
+    if not match:
+        raise ConfigError(f"Invalid spot direction range '{value}' - use e.g. \"300-350\".")
+    start, end = float(match.group(1)), float(match.group(2))
+    if not (0 <= start <= 360 and 0 <= end <= 360):
+        raise ConfigError(f"Spot direction range '{value}' must be within 0-360 degrees.")
+    return start, end
+
+
+@dataclass
 class TelemetryConfig:
     enabled: bool = False
     endpoint: Optional[str] = None
@@ -114,6 +141,7 @@ class AppConfig:
     channels: list[NotifierChannelConfig]
     telemetry: TelemetryConfig
     state_path: str = "~/.wingfoil_alert_state.json"
+    spots: SpotsConfig = field(default_factory=SpotsConfig)
 
 
 def load_config(path: str) -> AppConfig:
@@ -201,6 +229,22 @@ def load_config(path: str) -> AppConfig:
             endpoint=tel_raw.get("endpoint"),
         )
 
+        spots_raw = raw.get("spots", {}) or {}
+        spots = SpotsConfig(
+            enabled=bool(spots_raw.get("enabled", False)),
+            max_listed=int(spots_raw.get("max_listed", 3)),
+            favorites_only=bool(spots_raw.get("favorites_only", False)),
+            spots=[
+                SpotConfig(
+                    name=s["name"],
+                    direction_ranges=[_parse_direction_range(r) for r in s.get("directions", [])],
+                    url=s.get("url"),
+                    favorite=bool(s.get("favorite", False)),
+                )
+                for s in spots_raw.get("list", []) or []
+            ],
+        )
+
         return AppConfig(
             location=location,
             wind=wind,
@@ -210,6 +254,7 @@ def load_config(path: str) -> AppConfig:
             channels=channels,
             telemetry=telemetry,
             state_path=raw.get("state_path", "~/.wingfoil_alert_state.json"),
+            spots=spots,
         )
     except KeyError as e:
         raise ConfigError(f"Missing required config key: {e}") from e

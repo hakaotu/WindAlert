@@ -31,6 +31,18 @@ chart:
   enabled: false             # v0.3: liitä graafi hälytysviestiin (Telegram/Email)
   lookback_hours: 8          # kuinka monen tunnin historia näytetään graafissa
 
+spots:
+  enabled: false             # suosittele hälytysviestissä mitattuun tuulensuuntaan sopivia spotteja
+  max_listed: 3              # montako spottia viestissä näytetään
+  favorites_only: false      # true = suosittele vain favorite: true -spotteja
+  list:
+    # directions = suunnat asteina, joilla spotti toimii (myötäpäivään, esim. "325-15" kiertää pohjoisen kautta).
+    # Arvot esim. surffikamu.fi:n spottisivuilta - ne ovat suuntaa-antavia, arvioi olosuhteet aina itse.
+    - name: "Tampere, Kaupinojanlahti"
+      url: "https://surffikamu.fi/spot/2"
+      directions: ["300-350", "10-60"]
+      favorite: true
+
 schedule:
   active_hours: "6-22"        # ei hälytyksiä yöllä (24h-muodossa, paikallinen aika)
   poll_interval_minutes: 10   # kuinka usein run_alert-workflow/cron ajetaan (määritellään myös cronissa/Actionsissa erikseen)

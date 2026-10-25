@@ -68,6 +68,17 @@ lokaatiollasi jokin tuulen suunta on vaarallinen (esim. puhaltaa
 pois päin mantereesta eli voi ajautua kauas rannasta). Tyhjä lista
 hyväksyy kaikki suunnat.
 
+### Spottisuositukset
+
+`spots`-osiossa voit listata spotit tuulensuuntineen (esim.
+[surffikamu.fi](https://surffikamu.fi):n tiedoista). Hälytys- ja
+muistutusviestiin lisätään silloin lista spoteista, joille mitattu
+tuulensuunta sopii, ja linkki kunkin spotin kuvaukseen. `favorite: true`
+-spotit nostetaan listan kärkeen, ja spotit, joiden suunta-alueen
+keskelle tuuli osuu, menevät niiden ohi, joissa suunta on vasta rajoilla.
+Huom: suositus käyttää lokaation (esim. Siilinkarin) mittausasemaa,
+joten paikallinen suunta spotilla voi poiketa.
+
 ## Arkkitehtuuri lyhyesti
 
 ```
