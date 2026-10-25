@@ -79,6 +79,7 @@ class ForecastConfig:
 class ChartConfig:
     enabled: bool = False
     lookback_hours: int = 8
+    forecast_table_hours: int = 0  # 0 = no hourly forecast table under the chart
 
 
 @dataclass
@@ -204,6 +205,7 @@ def load_config(path: str) -> AppConfig:
         chart = ChartConfig(
             enabled=bool(chart_raw.get("enabled", False)),
             lookback_hours=int(chart_raw.get("lookback_hours", 8)),
+            forecast_table_hours=int(chart_raw.get("forecast_table_hours", 0)),
         )
 
         windy_raw = raw.get("windy", {}) or {}

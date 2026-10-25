@@ -65,3 +65,19 @@ def test_chart_handles_missing_values_without_crashing():
         out_path = os.path.join(tmp, "chart_gap.png")
         generate_wind_chart(obs, [], out_path)
         assert os.path.exists(out_path)
+
+
+def test_chart_with_forecast_table_is_taller():
+    wind_cfg = WindConfig(min_speed_ms=6.0, max_speed_ms=15.0, hysteresis=HysteresisConfig())
+    plain = tempfile.NamedTemporaryFile(suffix=".png", delete=False).name
+    table = tempfile.NamedTemporaryFile(suffix=".png", delete=False).name
+    generate_wind_chart(make_observations(), make_forecast(), plain, wind_cfg=wind_cfg)
+    generate_wind_chart(make_observations(), make_forecast(), table, wind_cfg=wind_cfg, table_hours=12)
+    import matplotlib.image as mpimg
+    assert mpimg.imread(table).shape[0] > mpimg.imread(plain).shape[0]
+
+
+def test_wind_colour_steps():
+    from core.chart import wind_colour
+    assert wind_colour(None) == "#eeeeee"
+    assert wind_colour(2.0) != wind_colour(8.0) != wind_colour(16.0)

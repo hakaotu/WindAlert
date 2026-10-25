@@ -25,11 +25,12 @@ wind:
 
 forecast:
   enabled: true
-  hours_ahead: 6
+  hours_ahead: 12
 
 chart:
   enabled: true             # v0.3: liitä graafi hälytysviestiin (Telegram/Email)
   lookback_hours: 8          # kuinka monen tunnin historia näytetään graafissa
+  forecast_table_hours: 12   # Windy-tyylinen tuntitaulukko graafin alle (tuuli, puuskat, suunta); 0 = pois
 
 windy:
   enabled: true              # lisää viestiin linkki windy.com-tuulikarttaan (lokaation koordinaatit, ilmainen)

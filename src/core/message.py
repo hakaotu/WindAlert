@@ -5,7 +5,7 @@ import logging
 import tempfile
 from typing import Optional, Sequence
 
-from .chart import generate_wind_chart
+from .chart import LOCAL_TZ, generate_wind_chart
 from .config import ChartConfig, ForecastConfig, LocationConfig, SpotsConfig, WindConfig, WindyConfig
 from .models import Alert, ForecastPoint, WindReading, deg_to_compass
 from .spots import spots_summary
@@ -27,7 +27,7 @@ def _forecast_summary(forecast: list[ForecastPoint], wind_cfg: WindConfig) -> Op
 
     # Find the last consecutive-ish point still in band, starting from now.
     last_good = in_band[-1]
-    until_str = last_good.timestamp.strftime("%H:%M")
+    until_str = last_good.timestamp.astimezone(LOCAL_TZ).strftime("%H:%M")
     return f"Ennusteen mukaan tuuli pysyy sopivana ainakin klo {until_str} asti."
 
 
@@ -44,7 +44,10 @@ def _build_chart_image(
         return None
     try:
         tmp_path = tempfile.NamedTemporaryFile(suffix=".png", delete=False).name
-        return generate_wind_chart(observations, forecast, tmp_path, wind_cfg=wind_cfg, title=title)
+        return generate_wind_chart(
+            observations, forecast, tmp_path, wind_cfg=wind_cfg, title=title,
+            table_hours=chart_cfg.forecast_table_hours,
+        )
     except Exception as e:  # noqa: BLE001 - a chart failure must not block the alert
         log.warning("Chart generation failed, sending alert without image: %s", e)
         return None
