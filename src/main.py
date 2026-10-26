@@ -17,8 +17,9 @@ import argparse
 import logging
 import sys
 from datetime import datetime, timezone
+from typing import Optional
 
-from core import fmi_client, hysteresis, message, open_meteo
+from core import daylight, fmi_client, hysteresis, message, open_meteo
 from core.config import AppConfig, NotifierChannelConfig, load_config_or_exit
 from core.models import Alert, WindReading
 from notifiers.base import Notifier
@@ -67,10 +68,20 @@ def build_notifiers(channels: list[NotifierChannelConfig]) -> list[Notifier]:
     return notifiers
 
 
-def is_within_active_hours(cfg: AppConfig) -> bool:
-    start, end = cfg.schedule.active_hours_range()
-    now_hour = datetime.now().hour
-    return start <= now_hour <= end
+def alert_window_now(
+    cfg: AppConfig, now: datetime
+) -> tuple[bool, Optional[daylight.Window], Optional[datetime]]:
+    """(is_open, window for now's Helsinki date, carry_over_cutoff)."""
+    window, cutoff = daylight.current_window(
+        now,
+        cfg.location.latitude,
+        cfg.location.longitude,
+        cfg.schedule.active_hours_range(),
+        cfg.schedule.daylight_only,
+        cfg.schedule.sunset_margin_minutes,
+    )
+    is_open = window is not None and window[0] <= now < window[1]
+    return is_open, window, cutoff
 
 
 def resolve_station(cfg: AppConfig) -> int:
@@ -93,7 +104,7 @@ def send_alert(alert: Alert, notifiers: list[Notifier]) -> None:
             log.exception("Unexpected error sending via %s", notifier.name())
 
 
-def run(config_path: str) -> int:
+def run(config_path: str, now: Optional[datetime] = None) -> int:
     logging.basicConfig(
         level=logging.INFO,
         format='{"time": "%(asctime)s", "level": "%(levelname)s", "msg": %(message)r}',
@@ -101,8 +112,14 @@ def run(config_path: str) -> int:
 
     cfg = load_config_or_exit(config_path)
 
-    if not is_within_active_hours(cfg):
-        log.info("Outside active hours (%s) - skipping this run.", cfg.schedule.active_hours)
+    now = now or datetime.now(timezone.utc)
+    in_window, window, cutoff = alert_window_now(cfg, now)
+    if not in_window:
+        shown = (
+            "-".join(t.astimezone(daylight.LOCAL_TZ).strftime("%H:%M") for t in window)
+            if window else "no window today"
+        )
+        log.info("Outside alert window (%s) - skipping this run.", shown)
         return 0
 
     notifiers = build_notifiers(cfg.channels)
@@ -125,6 +142,10 @@ def run(config_path: str) -> int:
         return 0
 
     latest = observations[-1]
+    if cutoff is not None and latest.timestamp < cutoff:
+        log.warning("Latest observation %s predates the closed period (since %s) - skipping this run.",
+                    latest.timestamp.isoformat(), cutoff.isoformat())
+        return 0
 
     forecast = []
     if cfg.forecast.enabled:
@@ -136,6 +157,11 @@ def run(config_path: str) -> int:
             log.warning("Forecast fetch failed (continuing without it): %s", e)
 
     state = hysteresis.load_state(cfg.state_path)
+    if cutoff is not None:
+        expired = hysteresis.expire_carried_over_alert(state, cutoff)
+        if expired != state:
+            log.info("Alert carried over from before today's window - closing it silently.")
+            state = expired
     decision = hysteresis.evaluate(latest, observations, state, cfg.wind)
 
     if decision.should_notify:

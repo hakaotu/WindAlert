@@ -91,8 +91,13 @@ class WindyConfig:
 
 @dataclass
 class ScheduleConfig:
-    active_hours: str = "0-23"
+    # Europe/Helsinki local time, start inclusive and end exclusive ("6-22" =
+    # 06:00-22:00). "0-24" is the whole day.
+    active_hours: str = "0-24"
     poll_interval_minutes: int = 10
+    # When on, alerts are also limited to sunrise .. sunset minus the margin.
+    daylight_only: bool = False
+    sunset_margin_minutes: int = 0
 
     def active_hours_range(self) -> tuple[int, int]:
         start, end = self.active_hours.split("-")
@@ -131,6 +136,20 @@ def _parse_direction_range(value: Any) -> tuple[float, float]:
     if not (0 <= start <= 360 and 0 <= end <= 360):
         raise ConfigError(f"Spot direction range '{value}' must be within 0-360 degrees.")
     return start, end
+
+
+def _validate_schedule(schedule: ScheduleConfig) -> None:
+    try:
+        start, end = schedule.active_hours_range()
+    except ValueError:
+        start, end = -1, -1
+    if not (0 <= start < end <= 24):
+        raise ConfigError(
+            f"schedule.active_hours '{schedule.active_hours}' is invalid - use "
+            f"\"START-END\" in whole hours with 0 <= START < END <= 24, e.g. \"6-22\"."
+        )
+    if schedule.sunset_margin_minutes < 0:
+        raise ConfigError("schedule.sunset_margin_minutes must be 0 or more.")
 
 
 @dataclass
@@ -218,9 +237,12 @@ def load_config(path: str) -> AppConfig:
 
         sched_raw = raw.get("schedule", {})
         schedule = ScheduleConfig(
-            active_hours=str(sched_raw.get("active_hours", "0-23")),
+            active_hours=str(sched_raw.get("active_hours", "0-24")),
             poll_interval_minutes=int(sched_raw.get("poll_interval_minutes", 10)),
+            daylight_only=bool(sched_raw.get("daylight_only", False)),
+            sunset_margin_minutes=int(sched_raw.get("sunset_margin_minutes", 0)),
         )
+        _validate_schedule(schedule)
 
         channels = []
         for ch in notifications_raw.get("channels", []):

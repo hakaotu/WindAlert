@@ -289,3 +289,124 @@ Window for local date 2026-10-25 = `[max(05:34:53Z, 04:00Z), min(14:43:14Z - 2 h
    Default: the full alert. Reason: the owner has not been told anything that day, and the full alert is the "go now" message they asked for. This uses existing messages only; no text changes.
 
 The backlog's question about manual runs is resolved as assumed: the rule applies to them too, because they go through the same `run()`. No question is needed.
+
+---
+
+## Amendment 1 (2026-10-26) — carry-over threshold, after review of da06542
+
+Sections 1-10 above stay as approved. Where this amendment contradicts them, this amendment wins; the superseded passages are listed in A.6. The owner decisions are unchanged: silent when the window closes, and exactly one full `wind_start` on the first in-window morning run if it is still windy.
+
+### A.1 The defect (reviewer finding, re-verified against the code)
+
+- `evaluate()` stamps every notification with the observation time, not the run time: `now = latest.timestamp` (`src/core/hysteresis.py:122`), written at lines 155 (`wind_start`) and 174 (`wind_still`).
+- `expire_carried_over_alert` keeps the state only if `max(notified) >= window_open` (`src/core/hysteresis.py:84`), and `main.run` passes `window[0]` (`src/main.py:157`).
+- `follows_gap` is true on **every** in-window run with the owner's config, not just the first (`src/core/daylight.py:110` depends only on the local date), so the check is repeated on every run of the day.
+- FMI observations lag the run. The reviewer measured about 3 min from six production state commits against `gh run` start times: run 22:05:51Z → obs 22:03, 19:45:24Z → 19:43, 17:15:24Z → 17:13, 13:41:10Z → 13:38, 08:35:47Z → 08:33, 09:01:20Z → 08:59. Script: `/private/tmp/claude-503/-Users-tuomo-hakaoja-Documents-Coding-WindAlert/d7ed8708-326d-4419-bc70-1584426d9607/scratchpad/lag.py`. I did not rerun it.
+- The result: if the first in-window run starts less than the lag after the window opens, its fresh `wind_start` is stamped *before* `window_open`. The next run sees an ALERTED state whose last notification is "before the window", expires it and sends `wind_start` again. Reviewer's reproduction: window opens 05:36:24Z on 2026-10-26, runs at 05:38:20Z, 05:48:20Z and 05:58:20Z, each with obs 3 min earlier, gives two `wind_start` posts.
+- The integration tests missed it because `_observations(now)` puts the latest reading exactly at `now` (`tests/test_integration_smoke.py:132`).
+
+The root mistake is in the plan (section 3, `hysteresis.py` bullet): it compared a timestamp from the observation clock with an instant from the run clock.
+
+### A.2 The fix: compare against the start of the closed period, not the window opening
+
+**New rule.** The cut-off is the instant the closed period before today's window began:
+
+- `cutoff = prev[1]` (yesterday's window close) when yesterday had a window and `prev[1] < window[0]`;
+- `cutoff = today's local midnight` (Helsinki, as UTC) when yesterday had no window (polar night, or an empty intersection);
+- no cut-off (`None`) when there was no closed period (`prev[1] >= window[0]`, i.e. always-open setups), or when today has no window (the gate has already returned in that case).
+
+An ALERTED state is expired iff every notification time is `< cutoff` (or there are none). The comparison itself is unchanged from `hysteresis.py:84`; only the instant it compares against changes.
+
+**Why this is correct, in both directions.**
+
+1. *Yesterday's notifications are always expired.* Every notification from yesterday's window was stamped with an observation time ≤ that run's fetch time, and the run itself passed the gate, so it started before `prev[1]`. The stamp is therefore `< prev[1]` (see the residual case in A.7). For the "no window yesterday" case, every earlier notification is before today's local midnight by definition.
+2. *Today's notifications are never expired, however old the observation is.* Any stamp written today is `latest.timestamp` from a fetch made today. This is safe as long as that observation is newer than the cut-off. That rests on a structural margin, not on a lag allowance. With the owner's config, the shortest closed period in Tampere is around midsummer: close `min(sunset 20:12Z − 2 h, 19:00Z) = 18:12Z`, next open `max(sunrise 00:41Z, 03:00Z) = 03:00Z`, so about **8 h 48 min** (inputs: the section 7 reference table, 2026-06-21; the 20th differs by seconds). The fetch lookback is `max(60, 30, 8 × 60) = 480` min (`src/main.py:132-134`, with `chart.enabled: true` and `lookback_hours: 8` at `config.yaml:32-33`). So no observation FMI returns on an in-window run can be older than the cut-off: open − 8 h is later than open − 8 h 48 min. A 3-minute or a 45-minute FMI delay makes no difference.
+3. *A guard makes point 2 unconditional* for other configs: another location, a longer `lookback_hours`, or polar night yesterday with an early sunrise today. See A.3, `main.py`. If the latest observation is older than the cut-off, it describes the closed period or earlier, so it cannot be the basis of a "go now" alert. The run logs a warning and returns 0 without loading or saving state. Together with point 2, this gives the invariant: **on a run after a closed period, every stamp `evaluate()` writes is `>= cutoff`, and the cut-off is the same for every run in the window, so a state written today is never expired today.** "Exactly one `wind_start`" follows from that. With the owner's config the guard cannot fire (point 2); it exists so that the invariant does not depend on a lookback setting.
+
+**Why the cut-off does not move during the day.** It depends only on the Helsinki local date of `now` (`daylight.py:106`), and a window never crosses local midnight, because the cap ends at hour ≤ 24 and the close is exclusive.
+
+### A.3 Files to modify (amendment)
+
+**`src/core/daylight.py` — `current_window`**
+- Return `(window, carry_over_cutoff)` instead of `(window, follows_gap)`, where `carry_over_cutoff: Optional[datetime]` follows A.2:
+  ```
+  if window is None:            cutoff = None
+  elif prev is None:            cutoff = _local_midnight_utc(day)
+  elif prev[1] < window[0]:     cutoff = prev[1]
+  else:                         cutoff = None
+  ```
+  `_local_midnight_utc` already exists (`daylight.py:33`). Update the docstring to say what the cut-off means and why it is the close and not the open (one sentence: "notification stamps are observation times, which lag the run").
+- Callers: `src/main.py:75` and `tests/test_daylight.py` (`test_follows_gap`, `test_current_window_uses_helsinki_date`, `test_six_am_cap_in_summer_tampere`, `test_polar_night_has_no_window`, which unpack `window, _`). Those that discard the second element need no change.
+
+**`src/core/hysteresis.py` — `expire_carried_over_alert`**
+- Rename the parameter `window_open` to `cutoff`. The body is unchanged (`max(notified) >= cutoff` keeps the state). Update the docstring: the cut-off is the start of the closed period, and it is deliberately not the window opening, because stamps are observation times (line 122) that lag the run.
+
+**`src/main.py`**
+- `alert_window_now` (lines 71-84): return `(is_open, window, carry_over_cutoff)`. Keep the line-83 comparison exactly as it is.
+- `run()`: rename `follows_gap` to `cutoff` at line 116.
+- **Stale-observation guard**, immediately after `latest = observations[-1]` (line 144) and before the forecast fetch:
+  ```python
+  if cutoff is not None and latest.timestamp < cutoff:
+      log.warning("Latest observation %s predates the closed period (since %s) - skipping this run.",
+                  latest.timestamp.isoformat(), cutoff.isoformat())
+      return 0
+  ```
+  This returns before `load_state`, so state is not read or written, the same as the outside-window path.
+- Lines 156-160: `if cutoff is not None: expired = hysteresis.expire_carried_over_alert(state, cutoff)`. Keep the log line.
+
+No other file changes. `config.py` is untouched (see A.5 for the bool parsing decision).
+
+### A.4 Ordered steps (amendment; do them on `wa-1-daylight` on top of da06542)
+
+1. **Regression tests first, and see them fail on da06542.** Add the A.5 tests marked *(regression)*.
+   *Check:* `PYTHONPATH=src python -m pytest tests/test_integration_smoke.py -k lagged tests/test_hysteresis.py -k cutoff` fails. The integration test should show `mock_post.call_count == 2`, and the second caption should start with "Tuulee ajokelpoisesti". If it passes on unchanged code, the test is not exercising the lag: check that the first run's observation is before `window_open`.
+2. **`daylight.current_window`** returns the cut-off; update `test_follows_gap` → `test_carry_over_cutoff`.
+   *Check:* `pytest tests/test_daylight.py` passes.
+3. **`hysteresis.expire_carried_over_alert`** parameter rename and docstring; update the unit tests per A.5.
+   *Check:* `pytest tests/test_hysteresis.py` passes.
+4. **`main.py`**: the rename, the cut-off passed to expire, and the stale guard.
+   *Check:* the step 1 tests now pass, and every test in `tests/test_integration_smoke.py` passes.
+5. **Should-fix test changes** (A.5, items S1-S3).
+   *Check:* `PYTHONPATH=src python -m pytest`: full suite green. Also run S1 against a deliberately broken copy, temporarily dropping `min(close_at, …)`'s cap operand at `daylight.py:85` in a scratch edit and reverting it. The new test must fail, and the old one at margin 120 would not have failed. Do not commit the break.
+
+### A.5 Test plan (amendment)
+
+| # | Test (file :: name) | Setup | Passes when | A failure looks like |
+|---|---|---|---|---|
+| R1 *(regression)* | `test_integration_smoke.py::test_lagged_morning_runs_send_one_wind_start`, parametrised over `obs_lag` = 3 min and 45 min | `open_ = daylight.alert_window(date(2026,10,26), 61.5177, 23.7538, (6,22), True, 120)[0]` (computed, not hard-coded; about 05:36Z). Start from `ALERTED_STATE`. Three runs at `open_ + 2 min`, `+ 12 min` and `+ 22 min`, each with the latest observation at `run − obs_lag`, so the first one is before `open_`. Each run's `after` state is passed in as the next run's `state_json`. Windy. | Total posts across the three runs == 1. The first run's caption contains "Tuulee ajokelpoisesti" and not "edelleen". Runs 2 and 3 do not post. The final state is `ALERTED` with `last_alert_at` equal to the first run's observation time. | Run 2 posts a second `wind_start` (the bug); or run 1 posts `wind_still` (the carry-over was not expired) |
+| R2 *(regression)* | `test_hysteresis.py::test_notification_before_window_open_but_after_cutoff_is_kept` | `CUTOFF = 2026-10-25T12:43:00Z`. ALERTED, `last_alert_at = 2026-10-26T05:35:20Z` (before a 05:36Z opening) | returned state is unchanged | state goes IDLE |
+| R3 | `test_hysteresis.py::test_cutoff_boundary` | ALERTED with the latest notification exactly at `CUTOFF`, and again at `CUTOFF − 1 s` | at `CUTOFF`: kept; at `− 1 s`: IDLE | inverted boundary (`>` instead of `>=`) |
+| R4 | `test_integration_smoke.py::test_stale_observation_after_gap_is_ignored` | Run `2026-10-26T07:00Z`, `ALERTED_STATE`, observations ending `2026-10-25T12:30Z` (before the 10-25 close at about 12:43Z), windy | no post; `fetch_observations` called; state text after == before | a `wind_start` built from yesterday's data, or a rewritten state |
+| R5 | `test_daylight.py::test_carry_over_cutoff` (replaces `test_follows_gap`) | Tampere 6-22 / daylight / 120 at `2026-10-26T07:00Z`; the same with `(0,24)` and daylight off; Utsjoki 2027-01-17 (polar night the day before; the developer confirms with `sun_times` that the 16th is `None` and the 17th is not, or picks the first such date and records it) | cut-off == `alert_window(date(2026,10,25), …)[1]`; `None`; == Helsinki midnight of the Utsjoki date | the cut-off equals the window opening (old behaviour), or it is set for 0-24 |
+
+Changes to existing tests:
+- `test_hysteresis.py`: replace `WINDOW_OPEN` with `CUTOFF = datetime(2026, 10, 25, 12, 43, tzinfo=timezone.utc)`. The existing four tests keep their intent. `test_alert_from_current_window_is_kept` still holds (06:10Z on 10-26 > cut-off).
+- `test_integration_smoke.py`: `_observations(now, speed, lag=timedelta(0))` puts the three readings at `now − lag − 20/10/0 min`; `_run_at` gains `obs_lag` and passes it through. Existing callers are unchanged.
+
+Should-fix items from the review:
+- **S1.** `test_daylight.py::test_22_cap_on_polar_day`. On Utsjoki 2026-06-21, margin 120 puts sunset − 120 min at exactly 19:00Z (= 22:00 EEST), so the cap was never exercised. Parametrise over `sunset_margin_minutes` 0 and 60. Assert `window[1] == utc(2026, 6, 21, 19, 0)` exactly, 18:30Z (21:30 EEST) open and 19:30Z (22:30 EEST) closed. Without the cap the close would be 21:00Z or 20:00Z, and 22:30 would read as open.
+- **S2.** Replace `test_daylight.py::test_window_open_inclusive_close_exclusive`, which tests the test file's own `is_open` helper, with `test_integration_smoke.py::test_alert_window_now_open_inclusive_close_exclusive`. Write `WINDOW_CONFIG_TEMPLATE` to a temp dir, load it with `core.config.load_config` (env vars set as in the other tests), take `open_, close = daylight.alert_window(date(2026,10,25), …)`, and assert that `main.alert_window_now(cfg, t)[0]` is True at `open_` and at `close − 1 s`, and False at `open_ − 1 s` and at `close`. A failure means `src/main.py:83` changed `<`/`<=`.
+- **S3 (optional nice-to-have, taken).** After `WINDOW_CONFIG_TEMPLATE` is built, add module-level asserts that `"latitude: 61.5177"`, `"longitude: 23.7538"` and `"reminder_interval_minutes: 120"` are in it. A silent no-op `.replace` (if `CONFIG_TEMPLATE` is edited) would otherwise run every window test against the wrong coordinates.
+- **Declined: strict bool parsing of `daylight_only`** (`src/core/config.py:242`). Every flag in the loader uses `bool(...)` (lines 227, 234, 249), so a strict parser for this one key breaks the pattern. The only misparse is a quoted string: `"false"` → True, which turns the gate *on*, the restrictive direction. An unquoted YAML `false`/`no` already parses correctly. If it is wanted, it should be done for all flags as a separate debt item.
+
+### A.6 Superseded passages in sections 1-10
+
+- §2 item 3, "the last notification was before the current window opened" → "every notification was before the start of the closed period that precedes the current window".
+- §2 table row "First in-window run next morning…": unchanged in outcome; the mechanism is the cut-off.
+- §3 `daylight.current_window` return value and `follows_gap` formula → A.3.
+- §3 `hysteresis.py` bullet "is before `window_open`" → "is before `cutoff`".
+- §3 `main.py` bullet "run `expire_carried_over_alert(state, window[0])`" → `(state, cutoff)`, plus the stale guard.
+- §7 "FMI observations … are built relative to the injected `now` (`now - 20/10/0 min`)" → the lag-aware helper above; `test_follows_gap` → R5.
+
+### A.7 Risks and open questions (amendment)
+
+- **Residual edge, accepted.** `fetch_observations` takes its own `datetime.now()` (`src/core/fmi_client.py:162`), after the gate's `now`. An observation stamped at or after `prev[1]` could therefore be returned by a run that passed the gate just before closing, if the fetch (with retries) finished ≥ ~3 min after closing and a new 10-min reading was published in between. That stamp would then be `≥ cutoff`. The consequence: the next morning would keep ALERTED and send `wind_still` ("still windy") instead of `wind_start`. It is never a duplicate and never a night message. I judge it too unlikely to justify clamping stamps to the gate time, which would change `evaluate()`'s reminder arithmetic.
+- **The lag numbers are the reviewer's.** I rely on them only for the existence of a lag. The fix does not depend on its size.
+
+### A.8 Owner-visible change
+
+**None intended.** The messages, their texts and the times they may arrive are unchanged. The only observable difference is that a duplicate morning `wind_start` (two "Tuulee ajokelpoisesti" about 10 min apart, if the first run happens within ~3 min of the window opening) can no longer happen. The stale-data guard cannot trigger with the owner's config (A.2 point 2). No new question for the owner.
+
+### A.9 Architecture doc impact (amends §5)
+
+§5 item 1 stands, with the new path described accurately. Scribe should write it as: at the first in-window run after a closed period, an ALERTED state whose last notification is older than the start of that closed period (the previous window's close) goes to IDLE silently. Not "older than the window opening". Add to the gate sentence §5 promised that a run whose latest FMI observation predates that closed period is skipped without touching state. No other statement in `ARCHITECTURE.md` is affected beyond the §5 list.

@@ -66,3 +66,48 @@ def test_no_enabled_channel_raises(monkeypatch):
 def test_missing_file_raises():
     with pytest.raises(ConfigError, match="not found"):
         load_config("/tmp/does_not_exist_12345.yaml")
+
+
+def test_schedule_defaults(monkeypatch):
+    monkeypatch.setenv("TEST_BOT_TOKEN", "abc123")
+    monkeypatch.setenv("TEST_CHAT_ID", "999")
+    path = write_temp_config(MINIMAL_CONFIG)
+    cfg = load_config(path)
+    os.unlink(path)
+    assert cfg.schedule.active_hours == "0-24"
+    assert cfg.schedule.daylight_only is False
+    assert cfg.schedule.sunset_margin_minutes == 0
+
+
+def test_schedule_keys_parsed(monkeypatch):
+    monkeypatch.setenv("TEST_BOT_TOKEN", "abc123")
+    monkeypatch.setenv("TEST_CHAT_ID", "999")
+    text = MINIMAL_CONFIG + (
+        '\nschedule:\n  active_hours: "6-22"\n  daylight_only: true\n'
+        "  sunset_margin_minutes: 120\n"
+    )
+    path = write_temp_config(text)
+    cfg = load_config(path)
+    os.unlink(path)
+    assert cfg.schedule.active_hours_range() == (6, 22)
+    assert cfg.schedule.daylight_only is True
+    assert cfg.schedule.sunset_margin_minutes == 120
+
+
+@pytest.mark.parametrize("value", ["22-6", "6-25", "abc"])
+def test_invalid_active_hours_raises(monkeypatch, value):
+    monkeypatch.setenv("TEST_BOT_TOKEN", "abc123")
+    monkeypatch.setenv("TEST_CHAT_ID", "999")
+    path = write_temp_config(MINIMAL_CONFIG + f'\nschedule:\n  active_hours: "{value}"\n')
+    with pytest.raises(ConfigError, match="schedule.active_hours"):
+        load_config(path)
+    os.unlink(path)
+
+
+def test_negative_sunset_margin_raises(monkeypatch):
+    monkeypatch.setenv("TEST_BOT_TOKEN", "abc123")
+    monkeypatch.setenv("TEST_CHAT_ID", "999")
+    path = write_temp_config(MINIMAL_CONFIG + "\nschedule:\n  sunset_margin_minutes: -5\n")
+    with pytest.raises(ConfigError, match="sunset_margin_minutes"):
+        load_config(path)
+    os.unlink(path)
