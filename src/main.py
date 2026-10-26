@@ -18,7 +18,7 @@ import logging
 import sys
 from datetime import datetime, timezone
 
-from core import fmi_client, hysteresis, message
+from core import fmi_client, hysteresis, message, open_meteo
 from core.config import AppConfig, NotifierChannelConfig, load_config_or_exit
 from core.models import Alert, WindReading
 from notifiers.base import Notifier
@@ -139,20 +139,34 @@ def run(config_path: str) -> int:
     decision = hysteresis.evaluate(latest, observations, state, cfg.wind)
 
     if decision.should_notify:
+        model_forecasts = {}
+        if cfg.chart.enabled and cfg.forecast.compare_models:
+            try:
+                model_forecasts = open_meteo.fetch_model_forecasts(
+                    cfg.location.latitude, cfg.location.longitude,
+                    cfg.forecast.hours_ahead, cfg.forecast.compare_models,
+                )
+            except open_meteo.OpenMeteoError as e:
+                log.warning("Model comparison fetch failed (continuing without it): %s", e)
+
         if decision.new_severity == "wind_start":
             alert = message.build_start_alert(
                 latest, forecast, cfg.location, cfg.wind, cfg.forecast,
-                observations=observations, chart_cfg=cfg.chart,
+                observations=observations, chart_cfg=cfg.chart, spots_cfg=cfg.spots, windy_cfg=cfg.windy,
+                model_forecasts=model_forecasts,
             )
         elif decision.new_severity == "wind_still":
             alert = message.build_still_alert(
                 latest, cfg.location, cfg.wind,
                 forecast=forecast, observations=observations, chart_cfg=cfg.chart,
+                spots_cfg=cfg.spots, windy_cfg=cfg.windy,
+                model_forecasts=model_forecasts,
             )
         else:
             alert = message.build_stop_alert(
                 latest, cfg.location, cfg.wind,
                 forecast=forecast, observations=observations, chart_cfg=cfg.chart,
+                model_forecasts=model_forecasts,
             )
         send_alert(alert, notifiers)
 

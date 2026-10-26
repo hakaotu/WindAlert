@@ -25,11 +25,129 @@ wind:
 
 forecast:
   enabled: true
-  hours_ahead: 6
+  hours_ahead: 12
+  compare_models: ["ecmwf_ifs025", "icon_seamless"]  # vertailumallit graafiin Open-Meteosta (ilmainen, ei avainta), esim. ecmwf_ifs025, icon_seamless, gfs_seamless
 
 chart:
   enabled: true             # v0.3: liitä graafi hälytysviestiin (Telegram/Email)
   lookback_hours: 8          # kuinka monen tunnin historia näytetään graafissa
+  forecast_table_hours: 12   # Windy-tyylinen tuntitaulukko graafin alle (tuuli, puuskat, suunta); 0 = pois
+
+windy:
+  enabled: true              # lisää viestiin linkki windy.com-tuulikarttaan (lokaation koordinaatit, ilmainen)
+  zoom: 10                   # kartan zoomaustaso
+
+spots:
+  enabled: true
+  max_listed: 3
+  favorites_only: false
+  list:
+    # Lähde: surffikamu.fi (haettu 25.10.2026). Suunnat ovat suuntaa-antavia - arvioi olosuhteet aina itse.
+    # Merkitse omat suosikit favorite: true, niin ne nousevat listan kärkeen.
+    - name: "Akaa, Luttusen uimaranta"
+      url: "https://surffikamu.fi/spot/15"
+      directions: ["255-15"]
+      favorite: false
+    - name: "Kangasala, Huutijärven uimaranta"
+      url: "https://surffikamu.fi/spot/12"
+      directions: ["325-350"]
+      favorite: false
+    - name: "Kangasala, Riun uimaranta"
+      url: "https://surffikamu.fi/spot/5"
+      directions: ["100-170", "10-80"]
+      favorite: false
+    - name: "Lempäälä, Hollonnokan veneenlaskupaikka"
+      url: "https://surffikamu.fi/spot/72"
+      directions: ["165-195", "235-305"]
+      favorite: false
+    - name: "Nokia, Halkoniemen saunan ranta"
+      url: "https://surffikamu.fi/spot/4"
+      directions: ["100-195"]
+      favorite: false
+    - name: "Tampere, Haiharanlahden pikku uimaranta"
+      url: "https://surffikamu.fi/spot/69"
+      directions: ["75-125", "280-330"]
+      favorite: false
+    - name: "Tampere, Halkoniemen uimaranta"
+      url: "https://surffikamu.fi/spot/64"
+      directions: ["100-125"]
+      favorite: false
+    - name: "Tampere, Härmälän uimaranta"
+      url: "https://surffikamu.fi/spot/66"
+      directions: ["280-350"]
+      favorite: false
+    - name: "Tampere, Härmälänrannan satama"
+      url: "https://surffikamu.fi/spot/61"
+      directions: ["280-330"]
+      favorite: false
+    - name: "Tampere, Kaupinojanlahti"
+      url: "https://surffikamu.fi/spot/2"
+      directions: ["300-350", "10-60"]
+      favorite: false
+    - name: "Tampere, Koukkuniemi"
+      url: "https://surffikamu.fi/spot/18"
+      directions: ["325-15"]
+      favorite: false
+    - name: "Tampere, Niemenranta"
+      url: "https://surffikamu.fi/spot/70"
+      directions: ["55-105", "190-240"]
+      favorite: false
+    - name: "Tampere, Pereensaaren veneranta"
+      url: "https://surffikamu.fi/spot/10"
+      directions: ["280-330"]
+      favorite: false
+    - name: "Tampere, Porrassalmi, Suomensaari"
+      url: "https://surffikamu.fi/spot/65"
+      directions: ["10-125"]
+      favorite: false
+    - name: "Tampere, Raholan uimaranta"
+      url: "https://surffikamu.fi/spot/1"
+      directions: ["100-125", "165-240"]
+      favorite: false
+    - name: "Tampere, Rantaperkiön pienvenesatama"
+      url: "https://surffikamu.fi/spot/17"
+      directions: ["280-15"]
+      favorite: false
+    - name: "Tampere, Ratikkasilta"
+      url: "https://surffikamu.fi/spot/11"
+      directions: ["55-105", "255-305"]
+      favorite: false
+    - name: "Tampere, Rauhaniemen uimaranta"  # remontissa kesä 2026 (surffikamu)
+      url: "https://surffikamu.fi/spot/8"
+      directions: ["10-105", "280-350"]
+      favorite: false
+    - name: "Tampere, Rosendahlin umaranta"
+      url: "https://surffikamu.fi/spot/63"
+      directions: ["100-150"]
+      favorite: false
+    - name: "Tampere, Saarenkärjen uimaranta"  # luode on offshore; erittäin matala, ei sovi foileille (surffikamu)
+      url: "https://surffikamu.fi/spot/67"
+      directions: ["75-125", "280-330"]
+      favorite: false
+    - name: "Tampere, Santalahden koiraranta"
+      url: "https://surffikamu.fi/spot/13"
+      directions: ["345-35"]
+      favorite: false
+    - name: "Tampere, Suomensaaren uimaranta"
+      url: "https://surffikamu.fi/spot/7"
+      directions: ["255-305"]
+      favorite: false
+    - name: "Tampere, Suvanto Tammerkoski"
+      url: "https://surffikamu.fi/spot/62"
+      directions: ["235-285"]
+      favorite: false
+    - name: "Tampere, Turrin uimaranta"
+      url: "https://surffikamu.fi/spot/3"
+      directions: ["255-330", "10-60"]
+      favorite: false
+    - name: "Ylöjärvi, Haverin rannan veneramppi"
+      url: "https://surffikamu.fi/spot/14"
+      directions: ["165-215", "255-330"]
+      favorite: false
+    - name: "Ylöjärvi, Manninranta"
+      url: "https://surffikamu.fi/spot/16"
+      directions: ["345-35"]
+      favorite: false
 
 schedule:
   active_hours: "6-22"        # ei hälytyksiä yöllä (24h-muodossa, paikallinen aika)
