@@ -66,13 +66,16 @@ def save_state(path: str, state: HysteresisState) -> None:
         f.write(state.to_json())
 
 
-def expire_carried_over_alert(state: HysteresisState, window_open: datetime) -> HysteresisState:
-    """Silently close an ALERTED state left over from before the alert window opened.
+def expire_carried_over_alert(state: HysteresisState, cutoff: datetime) -> HysteresisState:
+    """Silently close an ALERTED state left over from before the closed period.
 
-    Called by the caller only when there was a closed period before this
-    window. The persisted state still contains only the transition times: this
-    does not invent a send, last_alert_at is kept because that send really
-    happened, and last_reminder_at is cleared.
+    cutoff is the start of the closed period before the current alert window,
+    and deliberately not the window opening: notification stamps are
+    observation times (see evaluate), which lag the run, so a fresh alert can
+    be stamped a few minutes before the window opened. Called by the caller
+    only when there was a closed period. The persisted state still contains
+    only the transition times: this does not invent a send, last_alert_at is
+    kept because that send really happened, and last_reminder_at is cleared.
     """
     if state.state != AlertState.ALERTED.value:
         return state
@@ -81,7 +84,7 @@ def expire_carried_over_alert(state: HysteresisState, window_open: datetime) -> 
         for t in (state.last_alert_at, state.last_reminder_at)
         if t is not None
     ]
-    if notified and max(notified) >= window_open:
+    if notified and max(notified) >= cutoff:
         return state
     return HysteresisState(AlertState.IDLE.value, state.last_alert_at, None)
 

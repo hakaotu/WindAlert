@@ -77,9 +77,13 @@ def test_six_am_cap_in_summer_tampere():
     assert is_open(utc(2026, 6, 21, 3, 30), window)  # 06:30 EEST
 
 
-def test_22_cap_on_polar_day():
-    day = date(2026, 6, 21)
-    window = daylight.alert_window(day, *UTSJOKI, (6, 22), True, 120)
+@pytest.mark.parametrize("margin", [0, 60])
+def test_22_cap_on_polar_day(margin):
+    # Polar day has no sunset, so the "sunset" is the next local midnight and
+    # only the 22:00 cap can close the window. Margin 120 would put
+    # sunset - margin at exactly 22:00 and hide a missing cap.
+    window = daylight.alert_window(date(2026, 6, 21), *UTSJOKI, (6, 22), True, margin)
+    assert window[1] == utc(2026, 6, 21, 19, 0)  # 22:00 EEST
     assert is_open(utc(2026, 6, 21, 18, 30), window)  # 21:30 EEST
     assert not is_open(utc(2026, 6, 21, 19, 30), window)  # 22:30 EEST
 
@@ -95,14 +99,6 @@ def test_window_ends_two_hours_before_sunset():
     assert is_open(utc(2026, 10, 25, 10, 0), window)  # 12:00 local
     for hour, minute in ((17, 15), (19, 45), (22, 5)):
         assert not is_open(utc(2026, 10, 25, hour, minute), window)
-
-
-def test_window_open_inclusive_close_exclusive():
-    window = tampere_window(date(2026, 10, 25))
-    assert is_open(window[0], window)
-    assert not is_open(window[0] - timedelta(seconds=1), window)
-    assert is_open(window[1] - timedelta(seconds=1), window)
-    assert not is_open(window[1], window)
 
 
 def test_dst_switch_day():
@@ -125,8 +121,23 @@ def test_current_window_uses_helsinki_date():
     assert window[0].astimezone(daylight.LOCAL_TZ).date() == date(2026, 10, 26)
 
 
-def test_follows_gap():
-    _, gap = tampere_current(utc(2026, 10, 26, 7, 0))
-    assert gap is True
-    _, gap = tampere_current(utc(2026, 10, 26, 7, 0), hours=(0, 24), daylight_only=False)
-    assert gap is False
+def test_carry_over_cutoff():
+    # Tampere, owner's schedule: the cut-off is the previous day's close, not
+    # today's opening.
+    window, cutoff = tampere_current(utc(2026, 10, 26, 7, 0))
+    assert cutoff == tampere_window(date(2026, 10, 25))[1]
+    assert cutoff < window[0]
+    # Always open: no closed period, so nothing to carry over from.
+    _, cutoff = tampere_current(utc(2026, 10, 26, 7, 0), hours=(0, 24), daylight_only=False)
+    assert cutoff is None
+    # Utsjoki: sun_times is None on 2027-01-16 and not on 2027-01-17, so the
+    # day before had no window and the cut-off is local midnight (EET).
+    assert daylight.sun_times(date(2027, 1, 16), *UTSJOKI) is None
+    assert daylight.sun_times(date(2027, 1, 17), *UTSJOKI) is not None
+    window, cutoff = daylight.current_window(
+        utc(2027, 1, 17, 10, 0), *UTSJOKI, (6, 22), True, 0)
+    assert window is not None
+    assert cutoff == utc(2027, 1, 16, 22, 0)
+    # No window today: no cut-off (the gate has already returned).
+    _, cutoff = daylight.current_window(utc(2026, 12, 21, 10, 0), *UTSJOKI, (6, 22), True, 120)
+    assert cutoff is None

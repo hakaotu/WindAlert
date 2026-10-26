@@ -7,7 +7,7 @@ that class of bug without needing real network access to FMI.
 import os
 import sys
 import tempfile
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from unittest.mock import patch
 
 import pytest
@@ -15,6 +15,8 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import main  # noqa: E402
+from core import daylight  # noqa: E402
+from core.config import load_config  # noqa: E402
 from core.models import WindReading, ForecastPoint  # noqa: E402
 
 CONFIG_TEMPLATE = """
@@ -57,6 +59,11 @@ schedule:
   daylight_only: true
   sunset_margin_minutes: 120
 """
+# A silent no-op .replace above (if CONFIG_TEMPLATE is edited) would run every
+# window test against the wrong place.
+assert "latitude: 61.5177" in WINDOW_CONFIG_TEMPLATE
+assert "longitude: 23.7538" in WINDOW_CONFIG_TEMPLATE
+assert "reminder_interval_minutes: 120" in WINDOW_CONFIG_TEMPLATE
 
 
 def _write_config(tmp_dir: str, template: str = CONFIG_TEMPLATE) -> str:
@@ -125,7 +132,9 @@ def _utc(*args) -> datetime:
     return datetime(*args, tzinfo=timezone.utc)
 
 
-def _observations(now: datetime, speed: float = 8.5) -> list[WindReading]:
+def _observations(now: datetime, speed: float = 8.5, lag: timedelta = timedelta(0)) -> list[WindReading]:
+    """Three readings ending `lag` before `now`: FMI observation times trail the run."""
+    now = now - lag
     return [
         WindReading(timestamp=now - timedelta(minutes=20), speed_ms=speed - 0.5, gust_ms=speed + 1.5, direction_deg=225.0),
         WindReading(timestamp=now - timedelta(minutes=10), speed_ms=speed - 0.5, gust_ms=speed + 1.5, direction_deg=225.0),
@@ -133,10 +142,13 @@ def _observations(now: datetime, speed: float = 8.5) -> list[WindReading]:
     ]
 
 
-def _run_at(now: datetime, state_json: str | None = None, speed: float = 8.5):
+def _run_at(now: datetime, state_json: str | None = None, speed: float = 8.5,
+            obs_lag: timedelta = timedelta(0), observations: list[WindReading] | None = None):
     """Run main.run with the clock at `now`; return (post mock, fetch mock, state text before, after)."""
+    if observations is None:
+        observations = _observations(now, speed, obs_lag)
     with tempfile.TemporaryDirectory() as tmp_dir, \
-         patch("core.fmi_client.fetch_observations", return_value=_observations(now, speed)) as fetch, \
+         patch("core.fmi_client.fetch_observations", return_value=observations) as fetch, \
          patch("core.fmi_client.fetch_forecast", return_value=[]), \
          patch("notifiers.telegram.requests.post") as mock_post:
 
@@ -254,3 +266,53 @@ def test_morning_after_no_wind_sends_nothing_and_goes_idle(monkeypatch):
     mock_post, _, _, after = _run_at(_utc(2026, 10, 26, 7, 0), ALERTED_STATE, speed=2.0)
     assert mock_post.called is False
     assert '"state": "IDLE"' in after
+
+
+@pytest.mark.parametrize("obs_lag", [timedelta(minutes=3), timedelta(minutes=45)])
+def test_lagged_morning_runs_send_one_wind_start(monkeypatch, obs_lag):
+    """Observation times trail the run, so the first run's wind_start is stamped
+    before the window opened. The following runs must still keep that state."""
+    monkeypatch.setenv("TEST_BOT_TOKEN", "dummy-token")
+    monkeypatch.setenv("TEST_CHAT_ID", "12345")
+    open_ = daylight.alert_window(date(2026, 10, 26), 61.5177, 23.7538, (6, 22), True, 120)[0]
+    runs = [open_ + timedelta(minutes=m) for m in (2, 12, 22)]
+
+    state = ALERTED_STATE
+    posts = []
+    for now in runs:
+        mock_post, _, _, state = _run_at(now, state, obs_lag=obs_lag)
+        posts.append(mock_post.call_count)
+        if len(posts) == 1:
+            assert "Tuulee ajokelpoisesti" in _caption(mock_post)
+            assert "edelleen" not in _caption(mock_post)
+
+    assert posts == [1, 0, 0]
+    assert '"state": "ALERTED"' in state
+    assert (runs[0] - obs_lag).isoformat() in state
+
+
+def test_stale_observation_after_gap_is_ignored(monkeypatch):
+    """Latest observation from before the 10-25 close (about 12:43Z): it describes
+    the closed period, so no alert may be built from it and state is untouched."""
+    monkeypatch.setenv("TEST_BOT_TOKEN", "dummy-token")
+    monkeypatch.setenv("TEST_CHAT_ID", "12345")
+    mock_post, fetch, before, after = _run_at(
+        _utc(2026, 10, 26, 7, 0), ALERTED_STATE,
+        observations=_observations(_utc(2026, 10, 25, 12, 30)),
+    )
+    assert mock_post.called is False
+    assert fetch.called is True
+    assert after == before
+
+
+def test_alert_window_now_open_inclusive_close_exclusive(monkeypatch):
+    monkeypatch.setenv("TEST_BOT_TOKEN", "dummy-token")
+    monkeypatch.setenv("TEST_CHAT_ID", "12345")
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        cfg = load_config(_write_config(tmp_dir, WINDOW_CONFIG_TEMPLATE))
+    open_, close = daylight.alert_window(date(2026, 10, 25), 61.5177, 23.7538, (6, 22), True, 120)
+    one_second = timedelta(seconds=1)
+    assert main.alert_window_now(cfg, open_)[0] is True
+    assert main.alert_window_now(cfg, close - one_second)[0] is True
+    assert main.alert_window_now(cfg, open_ - one_second)[0] is False
+    assert main.alert_window_now(cfg, close)[0] is False

@@ -162,14 +162,15 @@ def test_old_state_file_without_recent_readings_field_loads_cleanly():
     assert state.state == AlertState.IDLE.value
 
 
-WINDOW_OPEN = datetime(2026, 10, 26, 5, 37, tzinfo=timezone.utc)
+# End of the previous window (10-25 close), i.e. the start of the closed period.
+CUTOFF = datetime(2026, 10, 25, 12, 43, tzinfo=timezone.utc)
 
 
-def test_carried_over_alert_expires_before_window_open():
+def test_carried_over_alert_expires_before_cutoff():
     state = HysteresisState(
         AlertState.ALERTED.value, "2026-10-25T06:59:00+00:00", "2026-10-25T12:30:00+00:00"
     )
-    result = expire_carried_over_alert(state, WINDOW_OPEN)
+    result = expire_carried_over_alert(state, CUTOFF)
     assert result.state == AlertState.IDLE.value
     assert result.last_alert_at == "2026-10-25T06:59:00+00:00"
     assert result.last_reminder_at is None
@@ -179,15 +180,31 @@ def test_alert_from_current_window_is_kept():
     state = HysteresisState(
         AlertState.ALERTED.value, "2026-10-25T06:59:00+00:00", "2026-10-26T06:10:00+00:00"
     )
-    assert expire_carried_over_alert(state, WINDOW_OPEN) == state
+    assert expire_carried_over_alert(state, CUTOFF) == state
+
+
+def test_notification_before_window_open_but_after_cutoff_is_kept():
+    """Stamps are observation times and lag the run, so a fresh alert can be
+    stamped a little before the window opened (05:36Z)."""
+    state = HysteresisState(AlertState.ALERTED.value, "2026-10-26T05:35:20+00:00", None)
+    assert expire_carried_over_alert(state, CUTOFF) == state
+
+
+def test_cutoff_boundary():
+    at_cutoff = HysteresisState(AlertState.ALERTED.value, CUTOFF.isoformat(), None)
+    assert expire_carried_over_alert(at_cutoff, CUTOFF) == at_cutoff
+    before = HysteresisState(
+        AlertState.ALERTED.value, (CUTOFF - timedelta(seconds=1)).isoformat(), None
+    )
+    assert expire_carried_over_alert(before, CUTOFF).state == AlertState.IDLE.value
 
 
 def test_idle_state_untouched():
     state = HysteresisState(AlertState.IDLE.value, "2026-10-25T06:59:00+00:00", None)
-    assert expire_carried_over_alert(state, WINDOW_OPEN) == state
+    assert expire_carried_over_alert(state, CUTOFF) == state
 
 
 def test_alerted_without_timestamps_expires():
-    result = expire_carried_over_alert(HysteresisState(AlertState.ALERTED.value), WINDOW_OPEN)
+    result = expire_carried_over_alert(HysteresisState(AlertState.ALERTED.value), CUTOFF)
     assert result.state == AlertState.IDLE.value
     assert result.last_alert_at is None

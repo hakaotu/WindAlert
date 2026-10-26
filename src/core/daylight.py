@@ -96,16 +96,26 @@ def current_window(
     active_hours: tuple[int, int],
     daylight_only: bool,
     sunset_margin_minutes: int,
-) -> tuple[Optional[Window], bool]:
-    """(window for now's Helsinki date, follows_gap).
+) -> tuple[Optional[Window], Optional[datetime]]:
+    """(window for now's Helsinki date, carry_over_cutoff).
 
-    follows_gap is True when the previous day's window closed before this
-    one opened (or one of them does not exist), i.e. there was a closed
-    period in between. The caller checks window[0] <= now_utc < window[1].
+    carry_over_cutoff is the instant the closed period before this window
+    began: the previous window's close, or local midnight when the previous
+    day had no window. None when there was no closed period (always-open
+    setups) or today has no window. It is the close and not the opening
+    because notification stamps are observation times, which lag the run.
+    The caller checks window[0] <= now_utc < window[1].
     """
     day = now_utc.astimezone(LOCAL_TZ).date()
     args = (latitude, longitude, active_hours, daylight_only, sunset_margin_minutes)
     window = alert_window(day, *args)
     prev = alert_window(day - timedelta(days=1), *args)
-    follows_gap = prev is None or window is None or prev[1] < window[0]
-    return window, follows_gap
+    if window is None:
+        cutoff = None
+    elif prev is None:
+        cutoff = _local_midnight_utc(day)
+    elif prev[1] < window[0]:
+        cutoff = prev[1]
+    else:
+        cutoff = None
+    return window, cutoff

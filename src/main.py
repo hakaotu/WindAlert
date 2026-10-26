@@ -70,9 +70,9 @@ def build_notifiers(channels: list[NotifierChannelConfig]) -> list[Notifier]:
 
 def alert_window_now(
     cfg: AppConfig, now: datetime
-) -> tuple[bool, Optional[daylight.Window], bool]:
-    """(is_open, window for now's Helsinki date, follows_gap)."""
-    window, follows_gap = daylight.current_window(
+) -> tuple[bool, Optional[daylight.Window], Optional[datetime]]:
+    """(is_open, window for now's Helsinki date, carry_over_cutoff)."""
+    window, cutoff = daylight.current_window(
         now,
         cfg.location.latitude,
         cfg.location.longitude,
@@ -81,7 +81,7 @@ def alert_window_now(
         cfg.schedule.sunset_margin_minutes,
     )
     is_open = window is not None and window[0] <= now < window[1]
-    return is_open, window, follows_gap
+    return is_open, window, cutoff
 
 
 def resolve_station(cfg: AppConfig) -> int:
@@ -113,7 +113,7 @@ def run(config_path: str, now: Optional[datetime] = None) -> int:
     cfg = load_config_or_exit(config_path)
 
     now = now or datetime.now(timezone.utc)
-    in_window, window, follows_gap = alert_window_now(cfg, now)
+    in_window, window, cutoff = alert_window_now(cfg, now)
     if not in_window:
         shown = (
             "-".join(t.astimezone(daylight.LOCAL_TZ).strftime("%H:%M") for t in window)
@@ -142,6 +142,10 @@ def run(config_path: str, now: Optional[datetime] = None) -> int:
         return 0
 
     latest = observations[-1]
+    if cutoff is not None and latest.timestamp < cutoff:
+        log.warning("Latest observation %s predates the closed period (since %s) - skipping this run.",
+                    latest.timestamp.isoformat(), cutoff.isoformat())
+        return 0
 
     forecast = []
     if cfg.forecast.enabled:
@@ -153,8 +157,8 @@ def run(config_path: str, now: Optional[datetime] = None) -> int:
             log.warning("Forecast fetch failed (continuing without it): %s", e)
 
     state = hysteresis.load_state(cfg.state_path)
-    if follows_gap:
-        expired = hysteresis.expire_carried_over_alert(state, window[0])
+    if cutoff is not None:
+        expired = hysteresis.expire_carried_over_alert(state, cutoff)
         if expired != state:
             log.info("Alert carried over from before today's window - closing it silently.")
             state = expired
