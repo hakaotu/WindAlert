@@ -2,7 +2,7 @@
 
 ## Open
 
-(none)
+- **Q9 (decision, 2026-10-26)** — When the wind turns good during allowed hours, how many minutes late may the alert arrive at most? Default if "don't know": 15 minutes. [WA-2]
 
 ## Answered
 
