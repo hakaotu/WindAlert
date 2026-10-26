@@ -2,10 +2,11 @@
 
 ## Open
 
-- **Q9 (decision, 2026-10-26)** — When the wind turns good during allowed hours, how many minutes late may the alert arrive at most? Default if "don't know": 15 minutes. [WA-2]
+(none)
 
 ## Answered
 
+- **Q9 (decision, 2026-10-26)** — When the wind turns good during allowed hours, how many minutes late may the alert arrive at most? Default if "don't know": 15 minutes. [WA-2] **Answer (2026-10-26): 15 minutes.**
 - **Q8 (decision, 2026-10-26)** — The daylight rule was seen working this evening (a check at 17:21 was skipped, nothing sent). Mark it finished now, or wait until tomorrow's first windy morning shows exactly one new alert? Default: mark finished now. **Answer (2026-10-26): mark finished.**
 - **Q7 (priority, 2026-10-26)** — The wind check is set to run every 10 minutes but GitHub runs it only every 2-5 hours (on 2026-10-26 only at 10:35 and 11:54 Finnish time, so a reminder due ~12:35 never went out; owner noticed no alert while the wind was above the limit). Fix this next, once the daylight rule is verified? Default: yes, next. **Answer (2026-10-26): yes, fix next — no alert may be missed during allowed hours.**
 - **Q4 (decision, 2026-10-26)** — Approve the daylight-only alerts plan? **Answer (2026-10-26): yes.**
