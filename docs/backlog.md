@@ -4,7 +4,7 @@ Status values: todo / in-progress / review / verifying / done. Status moves are 
 
 ## WA-1 — Alerts and reminders only in daylight and inside 6-22 Finnish local time
 
-Status: review
+Status: verifying
 
 **Who and why.** The owner, who sails/kites on Tampere lakes. Messages arrive after dark and in the middle of the night, so they cannot be trusted as "you can go out now". Towards winter the usable time on the water shrinks because dark comes early, so the problem grows each week.
 
