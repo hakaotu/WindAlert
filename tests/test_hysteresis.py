@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from core.config import HysteresisConfig, WindConfig  # noqa: E402
-from core.hysteresis import HysteresisState, evaluate  # noqa: E402
+from core.hysteresis import HysteresisState, evaluate, expire_carried_over_alert  # noqa: E402
 from core.models import AlertState, WindReading  # noqa: E402
 
 
@@ -160,3 +160,34 @@ def test_old_state_file_without_recent_readings_field_loads_cleanly():
     )
     state = HS.from_json(old_json)
     assert state.state == AlertState.IDLE.value
+
+
+WINDOW_OPEN = datetime(2026, 10, 26, 5, 37, tzinfo=timezone.utc)
+
+
+def test_carried_over_alert_expires_before_window_open():
+    state = HysteresisState(
+        AlertState.ALERTED.value, "2026-10-25T06:59:00+00:00", "2026-10-25T12:30:00+00:00"
+    )
+    result = expire_carried_over_alert(state, WINDOW_OPEN)
+    assert result.state == AlertState.IDLE.value
+    assert result.last_alert_at == "2026-10-25T06:59:00+00:00"
+    assert result.last_reminder_at is None
+
+
+def test_alert_from_current_window_is_kept():
+    state = HysteresisState(
+        AlertState.ALERTED.value, "2026-10-25T06:59:00+00:00", "2026-10-26T06:10:00+00:00"
+    )
+    assert expire_carried_over_alert(state, WINDOW_OPEN) == state
+
+
+def test_idle_state_untouched():
+    state = HysteresisState(AlertState.IDLE.value, "2026-10-25T06:59:00+00:00", None)
+    assert expire_carried_over_alert(state, WINDOW_OPEN) == state
+
+
+def test_alerted_without_timestamps_expires():
+    result = expire_carried_over_alert(HysteresisState(AlertState.ALERTED.value), WINDOW_OPEN)
+    assert result.state == AlertState.IDLE.value
+    assert result.last_alert_at is None

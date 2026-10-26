@@ -150,7 +150,9 @@ spots:
       favorite: false
 
 schedule:
-  active_hours: "6-22"        # ei hälytyksiä yöllä (24h-muodossa, paikallinen aika)
+  active_hours: "6-22"        # Suomen aika; 6-22 = klo 06:00-22:00
+  daylight_only: true         # hälytykset vain auringonnoususta auringonlaskuun miinus marginaali
+  sunset_margin_minutes: 120
   poll_interval_minutes: 10   # kuinka usein run_alert-workflow/cron ajetaan (määritellään myös cronissa/Actionsissa erikseen)
 
 notifications:
