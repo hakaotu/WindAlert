@@ -2,7 +2,7 @@
 
 ## Open
 
-(none)
+- **Q7 (priority, 2026-10-26)** — The wind check is set to run every 10 minutes but GitHub runs it only every 2-5 hours (on 2026-10-26 only at 10:35 and 11:54 Finnish time, so a reminder due ~12:35 never went out; owner noticed no alert while the wind was above the limit). Fix this next, once the daylight rule is verified? Default: yes, next.
 
 ## Answered
 
