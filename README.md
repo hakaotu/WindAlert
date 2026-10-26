@@ -103,7 +103,7 @@ toteuttavat yhteisen `Notifier`-rajapinnan (`src/notifiers/base.py`).
 Uuden kanavan lisääminen on yhden tiedoston kirjoittamista, ks.
 [docs/adding-a-notifier.md](docs/adding-a-notifier.md).
 
-Täysi arkkitehtuurisuunnitelma: [ARCHITECTURE.md](ARCHITECTURE.md).
+Täysi arkkitehtuurisuunnitelma: [docs/architecture.md](docs/architecture.md).
 
 ## Testit
 
