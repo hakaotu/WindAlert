@@ -2,6 +2,9 @@
 
 ## Open
 
+- **Q4 (decision, 2026-10-26)** — Approve the plan for daylight-only alerts (alerts only from sunrise until 2 h before sunset, within 6-22 Finnish time) so it can be built? Default if "don't know": approve. [WA-1, docs/plans/wa-1-daylight-window.md]
+- **Q5 (decision, 2026-10-26)** — When the daylight window closes while an alert is on, should the bot stay silent, or send a short "no more alerts today" note? Default: silent.
+- **Q6 (decision, 2026-10-26)** — If it is still windy the next morning, should the first message be the full "it's windy, go" alert or the shorter "still windy" reminder? Default: the full alert.
 
 ## Answered
 
