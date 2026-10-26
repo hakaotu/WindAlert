@@ -1,194 +1,141 @@
 # Arkkitehtuuri - WindAlert
 
-Tämä dokumentti kuvaa projektin toteutetun arkkitehtuurin (v0.1-v0.3) ja
-suunnitellut jatkoaskeleet. Alkuperäinen suunnitelmavaihe on tiivistetty
-tähän vastaamaan sitä, mikä on oikeasti rakennettu ja testattu - katso
-git-historiaa, jos haluat nähdä alkuperäisen, laajemman ideointivaiheen.
+Kuvaa koodin sellaisena kuin se on. Suunnitelmat ja perustelut:
+`docs/plans/`, tehtävät: `docs/backlog.md`.
 
-## 1. Kulmakivet (pysyneet muuttumattomina koko toteutuksen ajan)
+## 1. Ajon kulku (`src/main.py`, `run(config_path, now=None)`)
 
-1. **Zero-cost-by-default** - oletuspolku (GitHub Actions, Telegram,
-   ntfy.sh) toimii täysin ilmaisilla palveluilla.
-2. **Config over code** - kaikki käyttäjän säädöt yhdessä
-   `config.yaml`-tiedostossa, salaisuudet ympäristömuuttujina.
-3. **Plugin-arkkitehtuuri ilmoituskanaville** - ydinlogiikka ei tiedä
-   mitään yksittäisistä kanavista.
-4. **Robustius ennen ominaisuuksia** - retry-logiikka, tilan pysyvyys ja
-   testit ovat MVP:tä, ei jälkikäteen lisättävää.
-5. **Yksityisyys sisäänrakennettuna** - telemetria on opt-in ja
-   anonymisoitu jo lähteellä, ei vasta palvelimella.
+Jokainen ajo on erillinen prosessi (Actions, cron, systemd, Docker). Järjestys:
 
-## 2. Toteutunut arkkitehtuuri
+1. Konfiguraation lataus ja validointi (`core/config.py`, virhe -> poistuminen).
+2. **Ilmoitusikkuna** (`alert_window_now` -> `core/daylight.py`): ikkunan
+   ulkopuolella ajo kirjaa yhden rivin ja palaa 0:lla. Mitään ei haeta,
+   tilaa ei lueta eikä kirjoiteta.
+3. `build_notifiers()`; ei yhtään käyttökelpoista -> paluuarvo 1.
+4. FMI-havainnot (`core/fmi_client.py`, retry+backoff). Virhe -> 1, ei havaintoja -> 0.
+5. **Vanhentuneen havainnon vahti**: jos viimeisin havainto on vanhempi kuin
+   `cutoff` (ks. §3), ajo palaa 0:lla lukematta tai kirjoittamatta tilaa.
+6. Ennuste (valinnainen), `load_state`, `expire_carried_over_alert` (vain jos
+   `cutoff` ei ole None), `hysteresis.evaluate`.
+7. Jos `should_notify`: viesti `core/message.py`:llä (kuva `core/chart.py`,
+   `core/spots.py`, `core/open_meteo.py` mallivertailu), lähetys kaikille
+   kanaville erikseen (yhden kanavan virhe ei estä muita), telemetria jos päällä.
+8. `save_state` aina ilmoituspolun jälkeen. `send_alert` ei palauta
+   tulosta, joten tila tallentuu myös silloin kun kaikki kanavat epäonnistuivat.
+
+Ajon kello on `now` (UTC, oletus `datetime.now(timezone.utc)`); testit
+syöttävät sen parametrina. `now` ei riipu ajoympäristön aikavyöhykkeestä.
+
+`Notifier`-rajapinta (`src/notifiers/base.py`): `send(alert) -> bool`, `name() -> str`.
+`NOTIFIER_FACTORIES` (`main.py`) on ainoa paikka, joka tuntee kanavatyypit;
+vain `enabled: true` -kanavat ladataan ([adding-a-notifier.md](adding-a-notifier.md)).
+
+## 2. Ilmoitusikkuna (`core/daylight.py`, puhdas, vain stdlib)
+
+- Ikkuna päivälle (Europe/Helsinki-päivä) on `[max(auringonnousu, start:00),
+  min(auringonlasku - marginaali, end:00))`. Alku on mukana, loppu ei.
+  Auringonnousu/-lasku lasketaan paikallisesti (NOAA/Meeus, ei verkkoa).
+  Napapäivä = koko päivä, kaamos = ei ikkunaa (`alert_window` -> None).
+- Asetukset `schedule:` (`ScheduleConfig` `core/config.py`): `active_hours`
+  (Suomen aika, oletus `"0-24"`, loppu poissulkeva), `daylight_only`
+  (oletus `false`), `sunset_margin_minutes` (oletus `0`). Lataus epäonnistuu,
+  ellei `0 <= start < end <= 24` ja marginaali >= 0. `config.yaml` ja
+  `config.example.yaml`: `"6-22"`, `true`, `120`.
+- `current_window()` palauttaa `(ikkuna, cutoff)`. `cutoff` = edellisen
+  ikkunan sulkeutumishetki (tai paikallinen keskiyö, jos eilen ei ollut
+  ikkunaa); `None`, jos suljettua jaksoa ei ollut (esim. `"0-24"` ilman
+  daylight-tarkistusta) tai tänään ei ole ikkunaa.
+- `LOCAL_TZ` on määritelty sekä `daylight.py`:ssä että `chart.py`:ssä
+  (`daylight.py` ei tuo matplotlibia).
+
+## 3. Hystereesi (`core/hysteresis.py`)
+
+Tila `IDLE`/`ALERTED`, persistoitu JSON:iin (`state_path`; Actionsissa
+`state/wingfoil_alert_state.json`): `state`, `last_alert_at`, `last_reminder_at`.
+
+- **IDLE -> ALERTED** (`wind_start`): vähintään kaksi havaintoa >=
+  `min_speed_ms + trigger_margin_ms` ja niiden väli >= `min_minutes_above`,
+  laskettuna FMI:n tämän ajon havaintohistoriasta (`required_window_minutes()`),
+  ei ajojen välisestä tilasta.
+- **ALERTED -> IDLE** (`wind_stop`, ilmoitus lähtee): nopeus alle
+  `min_speed_ms - release_margin_ms`, yli `max_speed_ms` tai suunta ei kelpaa.
+- **ALERTED -> IDLE ilman ilmoitusta** (`expire_carried_over_alert(state, cutoff)`):
+  ensimmäisellä ikkunan sisäisellä ajolla suljetun jakson jälkeen ALERTED-tila,
+  jonka kaikki ilmoitusleimat ovat `< cutoff` (tai niitä ei ole), muuttuu
+  IDLE:ksi; `last_alert_at` säilyy, `last_reminder_at` tyhjenee. Jos tuuli on
+  yhä hyvä, `evaluate` lähettää uuden `wind_start`.
+- **Muistutus** (`wind_still`): `reminder_interval_minutes` > 0 ja se on
+  kulunut edellisestä ilmoitusleimasta. Lähtee vain ikkunan sisällä, koska
+  ikkunan ulkopuolella `evaluate` ei ajeta.
+- **Puuttuva data**: tila ei muutu, ei ilmoitusta.
+- **Invariantti**: `last_alert_at`/`last_reminder_at` ovat viimeisimmän
+  havainnon aikaleima (`evaluate`: `now = latest.timestamp`), eivät ajon
+  kello; havainnot jäävät ajosta jälkeen. Siksi `cutoff` on sulkeutumishetki,
+  ei ikkunan avautuminen: päivän ikkunan sisällä kirjoitettu leima on aina
+  `>= cutoff`, joten samana päivänä tallennettua tilaa ei vanhenneta uudelleen
+  (ei kaksoisviestiä aamulla).
+- Vanhat tilatiedostot latautuvat (`from_json` ohittaa tuntemattomat kentät);
+  korruptoitu tiedosto -> tuore tila.
+
+## 4. Repo-rakenne
 
 ```
-config.yaml
-    │
-    ▼
-┌─────────────────────────────────────────────────────────┐
-│  src/main.py  (orkestrointi)                             │
-│    │                                                      │
-│    ├─▶ core/fmi_client.py    havainnot + ennuste + retry  │
-│    ├─▶ core/hysteresis.py    IDLE/ALERTED-tilakone        │
-│    ├─▶ core/message.py       Alert-olion muodostus        │
-│    ├─▶ core/chart.py         PNG-graafi (valinnainen)      │
-│    └─▶ telemetry/reporter.py anonyymi opt-in-raportointi   │
-│                                                            │
-│  build_notifiers() lataa vain enabled: true -kanavat:      │
-│    notifiers/telegram.py, notifiers/email_notifier.py,     │
-│    notifiers/ntfy.py                                       │
-└─────────────────────────────────────────────────────────┘
+README.md, PRIVACY.md, LICENSE
+config.yaml, config.example.yaml, .env.example, requirements.txt (requests, PyYAML, matplotlib)
+src/main.py                 # ajon kulku, NOTIFIER_FACTORIES
+src/core/
+  models.py                 # Alert, WindReading, ForecastPoint, AlertState
+  config.py                 # lataus, validointi, ${ENV_VAR}-substituutio
+  daylight.py               # ilmoitusikkuna, auringonnousu/-lasku
+  fmi_client.py             # FMI WFS, retry+backoff, asemahaku
+  open_meteo.py             # mallivertailuennusteet (kaavio)
+  hysteresis.py             # tilakone + state.json
+  message.py                # Alert-tekstit
+  chart.py                  # matplotlib PNG (Agg)
+  spots.py                  # spottisuositukset tuulensuunnan mukaan
+src/notifiers/              # base.py, telegram.py (sendPhoto), email_notifier.py, ntfy.py (vain teksti)
+src/telemetry/reporter.py   # opt-in, anonymisoitu
+telemetry-server/           # valinnainen Cloudflare Worker
+.github/workflows/          # run_alert.yml, keep_alive.yml
+docker/                     # Dockerfile, docker-compose.yml
+docs/                       # architecture.md (tämä), hosting-*.md, adding-a-notifier.md,
+                            # telemetry.md, backlog.md, questions.md, plans/
+state/                      # wingfoil_alert_state.json (Actions committoi)
+tests/                      # test_{chart,config,daylight,hysteresis,integration_smoke,
+                            #  message,open_meteo,spots,telemetry}.py - 91 testiä
 ```
 
-Ydinperiaate näkyy suoraan koodissa: `Notifier`-rajapinta
-(`src/notifiers/base.py`) määrittää vain `send(alert) -> bool` ja
-`name() -> str`. `main.py`:n `NOTIFIER_FACTORIES`-sanakirja on ainoa
-paikka, joka tietää minkä tyyppisiä kanavia on olemassa - uuden
-lisääminen ei vaadi mitään muutoksia `core/`-kansioon
-(ks. [docs/adding-a-notifier.md](docs/adding-a-notifier.md)).
+Testit ajetaan: `PYTHONPATH=src python -m pytest`.
 
-## 3. Repo-rakenne (toteutunut)
+## 5. Ilmoituskanavat ja kuvat
 
-```
-WindAlert/
-├── README.md
-├── ARCHITECTURE.md            # tämä tiedosto
-├── PRIVACY.md
-├── LICENSE                    # MIT
-├── config.example.yaml
-├── .env.example
-├── requirements.txt
-├── src/
-│   ├── main.py                 # orkestrointi, NOTIFIER_FACTORIES
-│   ├── core/
-│   │   ├── models.py           # Alert, WindReading, ForecastPoint
-│   │   ├── config.py           # lataus, validointi, ${ENV_VAR}-substituutio
-│   │   ├── fmi_client.py       # FMI WFS-asiakas, retry+backoff, asemahaku
-│   │   ├── hysteresis.py       # tilakone + state.json-persistointi
-│   │   ├── message.py          # Alert-tekstin + graafin muodostus
-│   │   └── chart.py            # matplotlib PNG-graafi (Agg-backend)
-│   ├── notifiers/
-│   │   ├── base.py             # Notifier-rajapinta
-│   │   ├── telegram.py         # + kuvaliite (sendPhoto)
-│   │   ├── email_notifier.py   # SMTP + kuvaliite
-│   │   └── ntfy.py             # ntfy.sh push-ilmoitukset
-│   └── telemetry/
-│       └── reporter.py         # opt-in, anonymisoitu raportointi
-├── telemetry-server/
-│   ├── worker.js               # esimerkki-Cloudflare Worker (valinnainen)
-│   └── wrangler.toml
-├── .github/workflows/
-│   ├── run_alert.yml           # ajastettu ajo + state.json-committointi
-│   └── keep_alive.yml          # estää 60pv-inaktiivisuussammutuksen
-├── docker/
-│   ├── Dockerfile
-│   └── docker-compose.yml
-├── docs/
-│   ├── hosting-github-actions.md
-│   ├── hosting-self-host.md
-│   ├── adding-a-notifier.md
-│   └── telemetry.md
-└── tests/
-    ├── test_hysteresis.py       # 13 testiä
-    ├── test_config.py           # 4 testiä
-    ├── test_chart.py            # 3 testiä
-    ├── test_telemetry.py        # 5 testiä
-    └── test_integration_smoke.py  # 2 testiä, koko main.run()-putki mockatulla FMI-datalla
-```
+Telegram (kuva `sendPhoto`) ja Email (SMTP, MIME-liite) lähettävät
+`Alert.image_path`-kuvan, jos se on asetettu; ntfy.sh lähettää vain tekstin.
+Kaavio (`chart.enabled`, oletus `false`) piirtää havainnon, puuskan, ennusteen
+ja rajaviivat. WhatsApp ei ole ydinprojektissa.
 
-## 4. Hystereesi - toteutettu logiikka
+## 6. Telemetria (`telemetry/reporter.py`)
 
-`core/hysteresis.py`:n tilakone (`AlertState.IDLE` / `AlertState.ALERTED`):
-
-- **IDLE → ALERTED**: vaatii, että vähintään kaksi mittausta
-  ylittää `min_speed_ms + trigger_margin_ms`, ja niiden aikaleimojen
-  välinen kesto on ≥ `min_minutes_above`. Yksittäinen mittaus ei
-  koskaan riitä - tämä oli myös yksi kehityksen aikana löytynyt ja
-  testissä (`test_single_spike_does_not_trigger`) kiinni jäänyt bugi.
-  Tämä "sustained"-tarkistus lasketaan **FMI:n tämän ajon
-  havaintohistoriasta** (10 min resoluutio, `required_window_minutes()`
-  verran lookbackia), ei edellisten prosessiajojen väliltä kertyneestä
-  tilasta - GitHub Actionsin `schedule`-triggeri on best-effort ja voi
-  hiljaisella reposilla venyä useiden tuntien mittaisiksi väleiksi, jolloin
-  ajojen välinen kertymä ei koskaan ehtisi näyttää kestoa.
-- **ALERTED → IDLE**: joko tuuli alittaa `min_speed_ms - release_margin_ms`,
-  ylittää `max_speed_ms`, tai suunta ei enää täytä `direction_filter`-ehtoa.
-- **ALERTED-tilan muistutus**: jos `reminder_interval_minutes` > 0 ja tuuli
-  on pysynyt hyvänä sen verran pitkään ilman uutta hälytystä/muistutusta,
-  lähtee `wind_still`-ilmoitus ilman tilan vaihtumista.
-- **Puuttuva data**: ei muuta tilaa, ei lähetä ilmoitusta, ei kaada ohjelmaa.
-- **Tila persistoidaan** JSON-tiedostoon (`state_path`), koska jokainen
-  cron-/systemd-/Actions-ajo on erillinen prosessi. Persistoitu tila
-  sisältää enää vain IDLE/ALERTED-siirtymän ajankohdat, ei havaintohistoriaa.
-
-## 5. Ilmoituskanavat - toteutunut vertailu
-
-| Kanava | Tila | Kuvaliite | Huomio |
-|---|---|---|---|
-| Telegram | ✅ toteutettu | ✅ `sendPhoto` | Oletuskanava |
-| Email (SMTP) | ✅ toteutettu | ✅ MIME-liite | Universaali fallback |
-| ntfy.sh | ✅ toteutettu (v0.3) | ei (tekstiviesti) | Ilmainen push, ei API-avainta |
-| WhatsApp | ei ydinprojektissa | - | Jätetty tarkoituksella community-pluginiksi epävirallisten rajapintojen epävakauden vuoksi |
-
-## 6. Graafit (v0.3)
-
-`core/chart.py` piirtää matplotlibilla (Agg-backend, ei vaadi
-näyttöä) havaitun tuulen, puuskan ja ennusteen samaan kuvaan, sekä
-ala-/ylärajaviivat. `chart.enabled: false` oletuksena, koska se on
-raskaampi riippuvuus ja hidastaa ajoa hieman - käyttäjä ottaa käyttöön
-tietoisesti. Kuva liitetään `Alert.image_path`-kenttään, ja
-Telegram/Email-notifierit tarkistavat sen olemassaolon ja lähettävät
-liitteenä; ntfy.sh lähettää toistaiseksi vain tekstin.
-
-## 7. Telemetria (v0.3) - toteutunut malli
-
-`telemetry/reporter.py` toteuttaa suunnitelmassa kuvatut periaatteet
-suoraan koodissa:
-- Kaksoisvarmistus pois päältä (`enabled` JA `endpoint` pitää molemmat olla asetettuna).
+- Päällä vain jos `enabled` JA `endpoint` on asetettu.
 - `round_to_grid()` pyöristää sijainnin ~0.5 asteen ruudulle ennen lähetystä.
 - Satunnainen `instance_id` tallennetaan paikallisesti (`~/.wingfoil_instance_id`).
-- Lähetys on fire-and-forget, virheet nielaistaan - ei voi koskaan estää
-  oikeaa hälytystä.
+- Lähetys on fire-and-forget, virheet nielaistaan.
+- `telemetry-server/worker.js` ei tallenna `instance_id`:tä. Katso
+  [telemetry.md](telemetry.md), [PRIVACY.md](../PRIVACY.md).
 
-`telemetry-server/worker.js` on valinnainen esimerkki
-aggregointipalvelimesta (Cloudflare Worker), joka tietoisesti **ei**
-tallenna `instance_id`:tä - vain päivä+alue-tason laskureita. Tämä ei
-ole pakollinen osa projektia; kuka tahansa voi pystyttää oman tai
-käyttää yhteisön jaettua endpointia. Täysi selitys:
-[docs/telemetry.md](docs/telemetry.md), periaatteet: [PRIVACY.md](PRIVACY.md).
+## 7. Hostaus
 
-## 8. Hostaus - toteutunut
+- **GitHub Actions** (`run_alert.yml`): cron `*/10 4-21 * * *` (UTC) sekä
+  `workflow_dispatch`; molemmat kulkevat `main.run`in ikkunatarkistuksen
+  läpi. Ajo asettaa `PYTHONPATH=src`, ei `TZ`:ta. Lopuksi `git add state/` ja
+  commit vain jos tila muuttui, joten ikkunan ulkopuoliset ajot eivät
+  tuota committeja. `keep_alive.yml` (cron `0 6 1 * *`) tekee kuukausittaisen committin.
+- **Itsehostaus** ([hosting-self-host.md](hosting-self-host.md)): cron/systemd.
+- **Docker** (`docker/`): ajastus host-koneen croniin.
 
-- **GitHub Actions** (`.github/workflows/run_alert.yml`): committoi
-  `state/wingfoil_alert_state.json`-tiedoston takaisin repoon jokaisen
-  ajon lopussa, koska Actions-ympäristö on kertakäyttöinen.
-  `keep_alive.yml` tekee kerran kuussa triviaalin committin estämään
-  GitHubin 60 päivän inaktiivisuussammutuksen.
-- **Itsehostaus** (`docs/hosting-self-host.md`): cron- ja
-  systemd-timer-esimerkit, tila säilyy suoraan levyllä.
-- **Docker** (`docker/`): Dockerfile + compose, ajastus jätetään
-  host-koneen cronin vastuulle.
+## Open questions
 
-## 9. Roadmap - päivitetty tilanne
-
-**v0.1/v0.2/v0.3: ✅ toteutettu ja testattu** (22 testiä, ks. `tests/`).
-
-**Seuraavaksi harkittavaa (ei aikataulutettu):**
-- Community-notifierit: WhatsApp (CallMeBot-pohjainen, selkeästi
-  merkitty epäviralliseksi), Discord-webhook, Signal.
-- Web-lomake config.yamlin tekoon ei-tekniselle käyttäjälle.
-- Muiden maiden sääpalveluiden tuki (rajapinta on jo eristetty
-  `core/fmi_client.py`:hin, joten toinen maa tarkoittaisi vaihtoehtoista
-  clientia saman `WindReading`/`ForecastPoint`-mallin taakse).
-- ntfy.sh-kuvaliitteen tuki (tällä hetkellä vain Telegram/Email).
-
-## 10. Yhteenveto alkuperäisiin kysymyksiin
-
-- **Ilmoituskanavat**: ratkaistu plugin-rajapinnalla, kolme kanavaa
-  toteutettuna (Telegram, Email, ntfy.sh), WhatsApp tarkoituksella
-  ulkopuolella epävakauden vuoksi.
-- **Hostaus**: kolme dokumentoitua, testattua polkua, kaikki ilmaisia
-  tai käyttäjän oman laitteen varassa - projektin ylläpitäjä ei hostaa mitään.
-- **Käyttöseuranta**: toteutettu opt-in, kaksoisvarmistetulla,
-  anonymisoidulla telemetrialla, jonka koodin voi itse lukea, plus
-  valinnainen esimerkkiaggregointipalvelin, joka ei tallenna
-  yksilötason dataa.
+- Kesäaamut 06:00-07:00 paikallista aikaa: cron alkaa 04:00 UTC = 07:00 EEST,
+  joten ikkunan alku ennen sitä ei koskaan tule tarkistetuksi (cron + `config.yaml`).
+- `fetch_observations` ottaa oman `datetime.now()`:nsa (`fmi_client.py`) portin
+  `now`in jälkeen; ei vaikuta ikkunatarkistukseen, mutta ajon kello ei ole yksi.
