@@ -2,7 +2,7 @@
 
 ## Open
 
-(none)
+- **Q10 (decision, 2026-10-26)** — Approve the plan for reliable checks: a free timer in your Google account starts the wind check every 5 minutes 06:00-22:00, GitHub's own schedule stays as backup; two one-time setup steps by you (a GitHub key that does not expire, and pasting a script into Google Apps Script). Default: approve. [WA-2, docs/plans/wa-2-reliable-checks.md]
 
 ## Answered
 
