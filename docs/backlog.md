@@ -4,7 +4,7 @@ Status values: todo / in-progress / review / verifying / done. Status moves are 
 
 ## WA-1 — Alerts and reminders only in daylight and inside 6-22 Finnish local time
 
-Status: verifying
+Status: done (owner closed 2026-10-26 on the 15:21Z observation below; morning one-alert case covered by tests, not yet seen live)
 
 Verification observation (main session, 2026-10-26 15:21Z = 17:21 local): manual workflow_dispatch run 40348483380 on main logged "Outside alert window (07:36-14:41) - skipping this run."; nothing sent, no state commit. Earlier in-window run 09:54Z (11:54 local) ran the new code without error (state ALERTED, 7.0 m/s, no notification). Not yet observed: the first windy in-window morning run sending exactly one wind_start.
 
