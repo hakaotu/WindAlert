@@ -2,9 +2,9 @@
 
 ## Open
 
-- **Q1 (decision, 2026-10-26)** — Yesterday's changes (spot recommendations, Tampere spots, Windy link, hourly forecast table, model comparison in the chart) are on a side branch and do not reach the alerts yet. Merge them so they go live on the next run? Default if "don't know": merge.
-- **Q2 (decision, 2026-10-26)** — The alert's lower wind limit is 6 m/s, and the alert fires at about 6.5 m/s. At what wind speed do you want the alert to arrive? Default if "don't know": keep as is (about 6.5 m/s).
+(none)
 
 ## Answered
 
-(none yet)
+- **Q1 (decision, 2026-10-26)** — Merge yesterday's changes (spot recommendations, Tampere spots, Windy link, hourly forecast table, model comparison) so they go live? **Answer (2026-10-26): yes.** Merged into main.
+- **Q2 (decision, 2026-10-26)** — At what wind speed should the alert arrive? **Answer (2026-10-26): 7.5 m/s.** Lower limit raised 6.0 → 7.0 m/s (trigger margin 0.5 unchanged).

@@ -12,7 +12,7 @@ location:
   fmi_station_id: 101311      # Tampere Siilinkari -asema (siinä on tuulimittari)
 
 wind:
-  min_speed_ms: 6.0           # alaraja, josta lähtien tuuli on "ajokelpoista"
+  min_speed_ms: 7.0           # alaraja, josta lähtien tuuli on "ajokelpoista"
   max_speed_ms: 15.0          # yläraja - liian kova tuuli ei myöskään hälytä
   direction_filter: []        # esim. ["SW", "W", "NW"] - tyhjä = kaikki suunnat kelpaavat
                                # TÄRKEÄÄ TURVALLISUUDEN KANNALTA rannikolla/järvellä:
