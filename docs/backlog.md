@@ -49,7 +49,7 @@ Verification observation (main session, 2026-10-26 15:21Z = 17:21 local): manual
 
 ## WA-2 — No alert or reminder may be missed during the allowed hours
 
-Status: todo
+Status: in-progress
 
 **Who and why.** The owner, who sails/kites on Tampere lakes and relies on the alert to know when to go. The scheduled check does not run when it should, so an alert or reminder that is due inside the WA-1 daylight window can go unsent for the whole window.
 
