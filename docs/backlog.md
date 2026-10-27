@@ -8,6 +8,8 @@ Status: done (owner closed 2026-10-26 on the 15:21Z observation below; morning o
 
 Verification observation (main session, 2026-10-26 15:21Z = 17:21 local): manual workflow_dispatch run 40348483380 on main logged "Outside alert window (07:36-14:41) - skipping this run."; nothing sent, no state commit. Earlier in-window run 09:54Z (11:54 local) ran the new code without error (state ALERTED, 7.0 m/s, no notification). Not yet observed: the first windy in-window morning run sending exactly one wind_start.
 
+Later observation (main session, 2026-10-27 08:26Z = 10:26 local): first in-window run of the day (run 40473527071, dispatched with trigger=pinger while checking WA-2) logged "Alert carried over from before today's window - closing it silently." then "Sent alert via telegram" - the morning carry-over path ran live as planned.
+
 **Who and why.** The owner, who sails/kites on Tampere lakes. Messages arrive after dark and in the middle of the night, so they cannot be trusted as "you can go out now". Towards winter the usable time on the water shrinks because dark comes early, so the problem grows each week.
 
 **Observation (owner, 2026-10-26, in chat):** "nyt viestejä tulee, vaikka aurinko on jo laskenut ja ilmeisesti tuulee ajokelpoisesti tulee myös asetetun aikahaarukan ulkopuolella ... talvea kohti ne mahdolliset ajat olla vesillä kapenee, kun pimeä tulee aikaisin." (Messages arrive after sunset, and also outside the configured time window.)

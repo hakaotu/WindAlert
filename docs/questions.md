@@ -2,7 +2,7 @@
 
 ## Open
 
-(none)
+- **Q11 (click, 2026-10-27)** — Create the GitHub key the new 5-minute timer will use (step-by-step instructions in chat). Reply "done" or paste what you see if something differs. [WA-2, M1]
 
 ## Answered
 
