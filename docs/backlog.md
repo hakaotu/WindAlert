@@ -53,6 +53,8 @@ Later observation (main session, 2026-10-27 08:26Z = 10:26 local): first in-wind
 
 Status: verifying
 
+Observation (main session, 2026-10-27 09:18Z): pinger installed by owner at 08:56Z (Apps Script log: "Trigger installed: ping every 5 min", "Dispatched (HTTP 204)"). `gh run list --workflow run_alert.yml` shows "Wind alert check (pinger)" runs at 08:56:38Z, 08:59:17Z, 09:04:17Z, 09:09:17Z, 09:14:27Z, all success (gaps 2.7-5.2 min). AC5 full-day check pending: first eligible day 2026-10-28 (2026-10-27 had a manual dispatch at 08:26Z).
+
 **Who and why.** The owner, who sails/kites on Tampere lakes and relies on the alert to know when to go. The scheduled check does not run when it should, so an alert or reminder that is due inside the WA-1 daylight window can go unsent for the whole window.
 
 **Observation (owner, 2026-10-26 ~17:15 Finnish time, in chat):** "miksei oo tullu hälyä, vaikka tuuli on yli thresholdin?" (why no alert although the wind is above the threshold?)
