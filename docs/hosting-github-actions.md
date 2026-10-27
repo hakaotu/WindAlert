@@ -61,7 +61,8 @@ workflowt ovat täysin ilmaisia ja rajattomia.
      token vanhenee)
    - Repository access: **Only select repositories** → forkkisi
    - Permissions → Repository permissions → **Actions: Read and write**.
-     Kaikki muut jäävät arvoon "No access".
+     Kaikki muut jäävät arvoon "No access". Metadata: Read-only tulee
+     mukaan automaattisesti, eikä sitä voi muuttaa; se on oikein.
    - **Älä valitse** "Tokens (classic)", "All repositories" äläkä
      Contents- tai Workflows-oikeutta. Jos token vuotaa, sillä voi vain
      käynnistää, perua ja ottaa pois päältä tämän yhden repon
@@ -77,10 +78,9 @@ workflowt ovat täysin ilmaisia ja rajattomia.
 
    Aja funktio `installTrigger` kerran ja hyväksy luvat. Lokin pitää
    näyttää `Trigger installed: ping every 5 min` ja sen jälkeen
-   `Dispatched (HTTP 204)` (tai 200). Jos ajat sen klo 22 jälkeen
+   `Dispatched (HTTP 204)` (tai 200). Jos ajat sen klo 22-06 välillä
    Suomen aikaa, loki näyttää `Outside pinger hours - no dispatch`.
-   Ajastin kutsuu GitHubia vain klo 06-22 Suomen aikaa; sisällä
-   `ping()` tarkistaa ajan. `installTrigger` voi ajaa uudestaan
+   Ajastin kutsuu GitHubia vain klo 06-22 Suomen aikaa. `installTrigger` voi ajaa uudestaan
    turvallisesti (se poistaa ensin vanhan ajastimen), ja `removeTrigger`
    sammuttaa pingerin.
 
@@ -91,7 +91,7 @@ workflowt ovat täysin ilmaisia ja rajattomia.
 
    **Virhetaulukko.** Apps Scriptin loki näyttää GitHubin vastauksen
    HTTP-koodin; Apps Script lähettää myös epäonnistuneista ajoista
-   sähköpostin.
+   koosteen sähköpostiin kerran päivässä.
 
    | Loki | Syy |
    |---|---|
