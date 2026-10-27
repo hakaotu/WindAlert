@@ -80,8 +80,8 @@ Tila `IDLE`/`ALERTED`, persistoitu JSON:iin (`state_path`; Actionsissa
 ## 4. Repo-rakenne
 
 ```
-README.md, PRIVACY.md, LICENSE
-config.yaml, config.example.yaml, .env.example, requirements.txt (requests, PyYAML, matplotlib)
+README.md, PRIVACY.md, LICENSE, config.yaml, config.example.yaml, .env.example,
+requirements.txt (requests, PyYAML, matplotlib)
 src/main.py                 # ajon kulku, NOTIFIER_FACTORIES
 src/core/
   models.py                 # Alert, WindReading, ForecastPoint, AlertState
@@ -97,12 +97,13 @@ src/notifiers/              # base.py, telegram.py (sendPhoto), email_notifier.p
 src/telemetry/reporter.py   # opt-in, anonymisoitu
 telemetry-server/           # valinnainen Cloudflare Worker
 .github/workflows/          # run_alert.yml, keep_alive.yml
+tools/apps-script/pinger.gs # ulkoinen ajastin, liimataan Google Apps Scriptiin
 docker/                     # Dockerfile, docker-compose.yml
 docs/                       # architecture.md (tämä), hosting-*.md, adding-a-notifier.md,
                             # telemetry.md, backlog.md, questions.md, plans/
 state/                      # wingfoil_alert_state.json (Actions committoi)
 tests/                      # test_{chart,config,daylight,hysteresis,integration_smoke,
-                            #  message,open_meteo,spots,telemetry}.py - 91 testiä
+                            #  message,open_meteo,spots,telemetry}.py - 93 testiä
 ```
 
 Testit ajetaan: `PYTHONPATH=src python -m pytest`.
@@ -125,17 +126,25 @@ ja rajaviivat. WhatsApp ei ole ydinprojektissa.
 
 ## 7. Hostaus
 
-- **GitHub Actions** (`run_alert.yml`): cron `*/10 4-21 * * *` (UTC) sekä
-  `workflow_dispatch`; molemmat kulkevat `main.run`in ikkunatarkistuksen
-  läpi. Ajo asettaa `PYTHONPATH=src`, ei `TZ`:ta. Lopuksi `git add state/` ja
-  commit vain jos tila muuttui, joten ikkunan ulkopuoliset ajot eivät
-  tuota committeja. `keep_alive.yml` (cron `0 6 1 * *`) tekee kuukausittaisen committin.
-- **Itsehostaus** ([hosting-self-host.md](hosting-self-host.md)): cron/systemd.
-- **Docker** (`docker/`): ajastus host-koneen croniin.
+- **GitHub Actions** (`run_alert.yml`); molemmat liipaisimet kulkevat `main.run`in
+  ikkunatarkistuksen läpi:
+  - **Pääliipaisin**: Apps Script -ajastin (`tools/apps-script/pinger.gs`, Google-tilillä)
+    kutsuu `workflow_dispatch`-APIa 5 min välein klo 06:00-21:55 Suomen aikaa
+    (`START_HOUR`/`END_HOUR` kattavat `schedule.active_hours`in), `trigger=pinger`.
+    Script Properties: `GITHUB_TOKEN`, `GITHUB_REPO`. Ohje: [hosting-github-actions.md](hosting-github-actions.md).
+  - **Varaliipaisin**: cron `*/10 4-21 * * *` (UTC), best-effort; ilman pingeriä
+    ensimmäinen ajo on 07:00 EEST.
+  - `run-name`: `Wind alert check (schedule|manual|pinger)`. Syöte `trigger` (oletus
+    `manual`) on julistettava `main`issa ennen pingeriä, muuten HTTP 422.
+  - `concurrency: wind-alert-check` (`cancel-in-progress: false`): ajot eivät ole yhtä
+    aikaa, odottava korvautuu uudemmalla. `ref: main`: odottava ajo lukee edellisen tilan.
+  - Ajo asettaa `PYTHONPATH=src`, ei `TZ`:ta. Lopuksi `git add state/`, commit vain jos
+    tila muuttui; `git push` ei yritä uudelleen. `keep_alive.yml` (cron `0 6 1 * *`): kuukausicommit.
+- **Itsehostaus** ([hosting-self-host.md](hosting-self-host.md)): cron/systemd; **Docker**
+  (`docker/`): ajastus host-koneen croniin.
 
 ## Open questions
 
-- Kesäaamut 06:00-07:00 paikallista aikaa: cron alkaa 04:00 UTC = 07:00 EEST,
-  joten ikkunan alku ennen sitä ei koskaan tule tarkistetuksi (cron + `config.yaml`).
-- `fetch_observations` ottaa oman `datetime.now()`:nsa (`fmi_client.py`) portin
-  `now`in jälkeen; ei vaikuta ikkunatarkistukseen, mutta ajon kello ei ole yksi.
+- Pingerin tila ei näy repossa (Google-tili); Actions-historian `(pinger)`-ajot kertovat.
+- `fetch_observations` ottaa oman `datetime.now()`:nsa (`fmi_client.py`) portin `now`in
+  jälkeen; ei vaikuta ikkunatarkistukseen, mutta ajon kello ei ole yksi.
