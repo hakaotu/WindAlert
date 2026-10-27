@@ -1,9 +1,20 @@
 name: Wind alert check
+run-name: "Wind alert check (${{ inputs.trigger || github.event_name }})"
 
 on:
+  # GitHub's schedule is best-effort: in practice it runs a few times a day, not
+  # every 10 minutes. The reliable trigger is the external pinger that calls
+  # workflow_dispatch (tools/apps-script/pinger.gs, docs/hosting-github-actions.md);
+  # the cron stays as a fallback.
   schedule:
     - cron: "*/10 4-21 * * *"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      trigger:
+        description: "Who started this run (the external pinger sends 'pinger')"
+        type: string
+        required: false
+        default: manual
 
 permissions:
   contents: write
@@ -17,6 +28,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main  # branch head at checkout time, not the event's commit: a pending run must see the state the previous run pushed
 
       - uses: actions/setup-python@v5
         with:
