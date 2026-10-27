@@ -2,10 +2,11 @@
 
 ## Open
 
-- **Q12 (click, 2026-10-27)** — Set up the 5-minute timer in Google Apps Script (instructions in chat) and paste the execution log. [WA-2, M2]
+(none)
 
 ## Answered
 
+- **Q12 (click, 2026-10-27)** — Set up the 5-minute timer in Google Apps Script (instructions in chat) and paste the execution log. [WA-2, M2] **Answer (2026-10-27): done; log 10.56.36 "Trigger installed: ping every 5 min", 10.56.38 "Dispatched (HTTP 204)".**
 - **Q11 (click, 2026-10-27)** — Create the GitHub key the new 5-minute timer will use (step-by-step instructions in chat). Reply "done" or paste what you see if something differs. [WA-2, M1] **Answer (2026-10-27): done.**
 - **Q10 (decision, 2026-10-26)** — Approve the plan for reliable checks: a free timer in your Google account starts the wind check every 5 minutes 06:00-22:00, GitHub's own schedule stays as backup; two one-time setup steps by you (a GitHub key that does not expire, and pasting a script into Google Apps Script). Default: approve. [WA-2, docs/plans/wa-2-reliable-checks.md] **Answer (2026-10-27): yes.**
 - **Q9 (decision, 2026-10-26)** — When the wind turns good during allowed hours, how many minutes late may the alert arrive at most? Default if "don't know": 15 minutes. [WA-2] **Answer (2026-10-26): 15 minutes.**
