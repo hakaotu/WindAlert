@@ -316,3 +316,33 @@ def test_alert_window_now_open_inclusive_close_exclusive(monkeypatch):
     assert main.alert_window_now(cfg, close - one_second)[0] is True
     assert main.alert_window_now(cfg, open_ - one_second)[0] is False
     assert main.alert_window_now(cfg, close)[0] is False
+
+
+# --- WA-2: checks every 5 minutes must not duplicate or delay a reminder -------
+
+@pytest.mark.parametrize("obs_lag, expected_send", [
+    (timedelta(0), _utc(2026, 10, 26, 10, 35)),
+    (timedelta(minutes=3), _utc(2026, 10, 26, 10, 40)),  # observation 10:37, first one >= 10:33
+])
+def test_reminder_every_5_min_sends_exactly_one(monkeypatch, obs_lag, expected_send):
+    """Production state of 2026-10-26: last reminder 08:33Z, interval 120 min, so a
+    reminder is due at the first observation >= 10:33Z. Twenty checks 5 min apart
+    (09:55Z-11:30Z), each fed the previous one's state, send it once and at that run."""
+    monkeypatch.setenv("TEST_BOT_TOKEN", "dummy-token")
+    monkeypatch.setenv("TEST_CHAT_ID", "12345")
+    state = (
+        '{"state": "ALERTED", "last_alert_at": "2026-10-25T08:59:00+00:00", '
+        '"last_reminder_at": "2026-10-26T08:33:00+00:00"}'
+    )
+    runs = [_utc(2026, 10, 26, 9, 55) + timedelta(minutes=5 * i) for i in range(20)]
+    assert runs[-1] == _utc(2026, 10, 26, 11, 30)
+
+    sent = []
+    for now in runs:
+        mock_post, _, _, state = _run_at(now, state, speed=7.0, obs_lag=obs_lag)
+        if mock_post.called:
+            sent.append(now)
+            assert "edelleen ajokelpoista" in _caption(mock_post)
+
+    assert sent == [expected_send]
+    assert f'"last_reminder_at": "{(expected_send - obs_lag).isoformat()}"' in state
